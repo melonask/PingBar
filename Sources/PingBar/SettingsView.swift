@@ -87,6 +87,19 @@ struct SettingsView: View {
                 }
 
                 settingCard("Panel", systemImage: "rectangle.on.rectangle") {
+                    HStack {
+                        Text("Appearance")
+                        Spacer()
+                        Picker("Appearance", selection: appearanceBinding) {
+                            ForEach(AppAppearance.allCases) { appearance in
+                                Text(appearance.title).tag(appearance.rawValue)
+                            }
+                        }
+                        .labelsHidden()
+                        .pickerStyle(.segmented)
+                        .frame(width: 190)
+                    }
+                    Divider()
                     Toggle("Transparent background", isOn: panelTransparencyBinding)
                     Text("Use the macOS translucent material on both Status and Settings.")
                         .font(.caption)
@@ -233,6 +246,7 @@ struct SettingsView: View {
         monitor.setMenuBarCircleSize(PingSettings.defaultMenuBarCircleSize)
         monitor.setCircleStyle(PingSettings.defaultCircleStyle)
         monitor.setPanelTransparency(PingSettings.defaultPanelTransparency)
+        monitor.setAppearance(PingSettings.defaultAppearance)
     }
 
     private var isValidURL: Bool {
@@ -342,6 +356,13 @@ struct SettingsView: View {
         Binding(
             get: { monitor.panelTransparency },
             set: { monitor.setPanelTransparency($0) }
+        )
+    }
+
+    private var appearanceBinding: Binding<String> {
+        Binding(
+            get: { monitor.appearance.rawValue },
+            set: { monitor.setAppearance($0) }
         )
     }
 }

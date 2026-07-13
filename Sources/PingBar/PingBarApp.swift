@@ -90,6 +90,7 @@ private struct PingMenu: View {
                 Color(nsColor: .windowBackgroundColor)
             }
         }
+        .preferredColorScheme(monitor.appearance.colorScheme)
         .background(PanelWindowBehavior())
         .transaction { transaction in
             transaction.animation = nil
@@ -441,6 +442,16 @@ private struct PingMenu: View {
         formatter.dateFormat = "HH:mm:ss"
         return formatter
     }()
+}
+
+private extension AppAppearance {
+    var colorScheme: ColorScheme? {
+        switch self {
+        case .system: nil
+        case .light: .light
+        case .dark: .dark
+        }
+    }
 }
 
 private struct WindowDragRegion: NSViewRepresentable {

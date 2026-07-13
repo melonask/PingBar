@@ -20,6 +20,7 @@ final class PingMonitor: ObservableObject {
     @Published private(set) var menuBarCircleSize: Double
     @Published private(set) var circleStyle: CircleStyle
     @Published private(set) var panelTransparency: Bool
+    @Published private(set) var appearance: AppAppearance
 
     private let client: any PingClient
     private let defaults: UserDefaults
@@ -35,6 +36,7 @@ final class PingMonitor: ObservableObject {
         menuBarCircleSize = settings.menuBarCircleSize
         circleStyle = CircleStyle(rawValue: settings.circleStyle) ?? .colored
         panelTransparency = settings.panelTransparency
+        appearance = AppAppearance(rawValue: settings.appearance) ?? .system
     }
 
     var settings: PingSettings { PingSettings.load(from: defaults) }
@@ -101,6 +103,12 @@ final class PingMonitor: ObservableObject {
     func setPanelTransparency(_ value: Bool) {
         panelTransparency = value
         defaults.set(value, forKey: PingSettings.Keys.panelTransparency)
+    }
+
+    func setAppearance(_ rawValue: String) {
+        let value = AppAppearance(rawValue: rawValue) ?? .system
+        appearance = value
+        defaults.set(value.rawValue, forKey: PingSettings.Keys.appearance)
     }
 
     func start() {

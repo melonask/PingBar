@@ -76,15 +76,18 @@ struct PingMonitorTests {
         monitor.setMenuBarCircleSize(11)
         monitor.setCircleStyle(CircleStyle.monochrome.rawValue)
         monitor.setPanelTransparency(false)
+        monitor.setAppearance(AppAppearance.dark.rawValue)
 
         #expect(monitor.menuBarMode == .time)
         #expect(monitor.menuBarTextSize == 13)
         #expect(monitor.menuBarCircleSize == 11)
         #expect(monitor.circleStyle == .monochrome)
         #expect(!monitor.panelTransparency)
+        #expect(monitor.appearance == .dark)
         #expect(defaults.string(forKey: PingSettings.Keys.menuBarMode) == MenuBarDisplayMode.time.rawValue)
         #expect(defaults.string(forKey: PingSettings.Keys.circleStyle) == CircleStyle.monochrome.rawValue)
         #expect(!defaults.bool(forKey: PingSettings.Keys.panelTransparency))
+        #expect(defaults.string(forKey: PingSettings.Keys.appearance) == AppAppearance.dark.rawValue)
     }
 
     @Test func panelTransparencyDefaultsToEnabled() throws {
@@ -93,6 +96,7 @@ struct PingMonitorTests {
 
         #expect(monitor.panelTransparency)
         #expect(monitor.settings.panelTransparency)
+        #expect(monitor.appearance == .system)
     }
 
     private func makeDefaults() throws -> UserDefaults {
