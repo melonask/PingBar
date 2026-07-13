@@ -25,6 +25,27 @@ A native macOS menu-bar HTTP availability and latency monitor built with SwiftUI
 
 Download `PingBar.zip` from the latest [GitHub Release](../../releases/latest), unzip it, and open `PingBar.app`. No build tools are required. Because local releases are ad-hoc signed, the first launch may require right-clicking the app and choosing **Open**.
 
+### macOS cannot verify the app
+
+PingBar is currently ad-hoc signed rather than notarized by Apple, so macOS may show:
+
+> Apple could not verify “PingBar.app” is free of malware that may harm your Mac or compromise your privacy.
+
+Only continue if you downloaded PingBar from this repository's GitHub Releases page.
+
+1. Move `PingBar.app` to the Applications folder.
+2. Control-click or right-click `PingBar.app` and choose **Open**.
+3. Click **Open** in the confirmation dialog.
+
+If **Open** is not available, try launching the app once, then open **System Settings → Privacy & Security**, scroll to the Security section, and click **Open Anyway** next to the PingBar message.
+
+As a final option for a trusted download, remove only PingBar's quarantine attribute in Terminal:
+
+```sh
+xattr -dr com.apple.quarantine /Applications/PingBar.app
+open /Applications/PingBar.app
+```
+
 ## Build the app
 
 ```sh
