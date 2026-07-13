@@ -2,9 +2,13 @@
 
 A lightweight, native macOS menu-bar monitor for HTTP availability and latency. PingBar checks an endpoint on a schedule, keeps recent response history, and shows current health without taking space in the Dock.
 
-| Status | Settings |
+## Interface
+
+| Status dashboard | Settings |
 | --- | --- |
-| ![PingBar status panel](main.png) | ![PingBar settings panel](settings.png) |
+| ![PingBar status dashboard in dark mode](main.png) | ![PingBar settings in light mode](settings.png) |
+
+The status dashboard keeps current health, latency, recent history, and primary actions in one compact view. Settings uses the same panel footprint and scrolls independently, so switching pages does not move or resize the panel.
 
 ## Features
 
@@ -16,6 +20,8 @@ A lightweight, native macOS menu-bar monitor for HTTP availability and latency. 
 - Compact, fixed-width latency values that keep the menu-bar item stable.
 - Configurable menu-bar text size, circle size, HTTP success range, and chart window.
 - Movable status and settings panel with a shared compact footprint.
+- System, light, and dark appearances with optional macOS transparency.
+- Persistent panel position across checks, failures, and app launches.
 - Settings stored locally in macOS `UserDefaults`.
 
 ## Requirements
@@ -64,8 +70,10 @@ Click the PingBar item in the macOS menu bar to view current latency, recent sta
 
 - Click **Check Now** to run an immediate request.
 - Click **Settings** to configure the endpoint, timing, status thresholds, chart, and menu-bar appearance.
+- Click **Status** in the Settings header to return to the dashboard.
 - Drag the strip at the top of either page to move the panel.
 - Use **Circle**, **Circle + Time**, or **Time** to control the menu-bar display.
+- Choose **System**, **Light**, or **Dark** under **Panel** and optionally disable the transparent background.
 
 Menu-bar latency is rounded and kept to six monospaced characters so its reserved width does not change. Milliseconds appear as values such as `024 ms`; latencies of one second or more appear as values such as `1.24 s` or `12.3 s`.
 
@@ -78,6 +86,10 @@ Menu-bar latency is rounded and kept to six monospaced characters so its reserve
 | Red | Consecutive failures reached the configured failure threshold. |
 
 A successful request resets the consecutive-failure counter. Responses outside the configured inclusive HTTP status range count as failures.
+
+### Settings behavior
+
+Changes are saved automatically. Endpoint, interval, timeout, status thresholds, HTTP success range, chart history, menu-bar presentation, and panel appearance persist across launches. **Restore Defaults…** asks for confirmation before resetting all options.
 
 ## Develop
 

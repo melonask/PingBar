@@ -107,9 +107,13 @@ private struct PingMenu: View {
             HStack {
                 Button { page = .status } label: {
                     Label("Status", systemImage: "chevron.left")
+                        .padding(.vertical, 8)
+                        .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
                 .foregroundStyle(.secondary)
+                .help("Back to status")
+                .accessibilityLabel("Back to status")
                 Spacer()
                 Label("Settings", systemImage: "gearshape.fill")
                     .font(.caption.weight(.semibold))
