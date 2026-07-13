@@ -18,7 +18,18 @@ struct PingMonitorTests {
         #expect(monitor.state == .healthy)
         #expect(monitor.consecutiveFailures == 0)
         #expect(monitor.statusText == "24.330 ms")
+        #expect(monitor.menuBarStatusText == "024 ms")
         #expect(monitor.level == .green)
+    }
+
+    @Test func compactLatencyUsesStableSixCharacterValues() {
+        #expect(PingMonitor.compactLatencyText(milliseconds: 12.3456) == "012 ms")
+        #expect(PingMonitor.compactLatencyText(milliseconds: 123.456) == "123 ms")
+        #expect(PingMonitor.compactLatencyText(milliseconds: 123.556) == "124 ms")
+        #expect(PingMonitor.compactLatencyText(milliseconds: 999.6) == "1.00 s")
+        #expect(PingMonitor.compactLatencyText(milliseconds: 12_345) == "12.3 s")
+        #expect(PingMonitor.compactLatencyText(milliseconds: 123_456) == "123 s")
+        #expect(PingMonitor.compactLatencyText(milliseconds: 10_000_000) == "9999+s")
     }
 
     @Test func thresholdsControlYellowAndRedLevels() async throws {

@@ -29,28 +29,27 @@ private struct MenuBarStatusLabel: View {
     }
 
     var body: some View {
-        labelText.fixedSize()
+        HStack(spacing: 5) {
+            if monitor.menuBarMode != .time {
+                circle
+            }
+            if monitor.menuBarMode != .circle {
+                Text(monitor.menuBarStatusText)
+                    .font(.system(size: monitor.menuBarTextSize, weight: .medium, design: .monospaced))
+                    .frame(width: monitor.menuBarTextSize * 3.8, alignment: .trailing)
+            }
+        }
+        .fixedSize()
     }
 
-    private var labelText: Text {
-        let circle: Text = switch monitor.circleStyle {
-        case .colored:
+    @ViewBuilder
+    private var circle: some View {
+        if monitor.circleStyle == .colored {
             Text(statusEmoji)
                 .font(.system(size: monitor.menuBarCircleSize))
-        case .monochrome:
+        } else {
             Text("●")
                 .font(.system(size: monitor.menuBarCircleSize, weight: .bold, design: .rounded))
-        }
-        let time = Text(monitor.statusText)
-            .font(.system(size: monitor.menuBarTextSize, weight: .medium, design: .monospaced))
-
-        switch monitor.menuBarMode {
-        case .circle:
-            return circle
-        case .circleAndTime:
-            return circle + Text("  ") + time
-        case .time:
-            return time
         }
     }
 
@@ -64,6 +63,8 @@ private struct MenuBarStatusLabel: View {
 }
 
 private struct PingMenu: View {
+    private static let panelWidth = 420.0
+
     @ObservedObject var monitor: PingMonitor
     @State private var showingSettings = false
 
@@ -81,6 +82,8 @@ private struct PingMenu: View {
                         Label("Settings", systemImage: "gearshape.fill")
                             .font(.caption.weight(.semibold))
                             .foregroundStyle(.secondary)
+                            .padding(.vertical, 10)
+                            .background(WindowDragRegion())
                     }
                     .padding(.horizontal, 16)
                     .frame(height: 42)
@@ -92,10 +95,11 @@ private struct PingMenu: View {
             }
         }
         .frame(
-            width: showingSettings ? 470 : 360,
+            width: Self.panelWidth,
             height: showingSettings ? 610 : nil,
             alignment: .top
         )
+        .background(PanelWindowBehavior())
         .transaction { transaction in
             transaction.animation = nil
         }
@@ -108,6 +112,15 @@ private struct PingMenu: View {
 
     private var statusView: some View {
         VStack(alignment: .leading, spacing: 14) {
+            HStack {
+                Capsule()
+                    .fill(.tertiary)
+                    .frame(width: 34, height: 4)
+            }
+            .frame(maxWidth: .infinity)
+            .frame(height: 8)
+            .background(WindowDragRegion())
+
             HStack(spacing: 11) {
                 ZStack {
                     RoundedRectangle(cornerRadius: 10)
@@ -209,7 +222,7 @@ private struct PingMenu: View {
             }
         }
         .padding(14)
-        .frame(width: 360)
+        .frame(width: Self.panelWidth)
     }
 
     private var statistics: some View {
@@ -235,7 +248,16 @@ private struct PingMenu: View {
     }
 
     private var latencyChart: some View {
-        VStack(alignment: .leading, spacing: 0) {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack {
+                Text("LATENCY HISTORY")
+                    .font(.system(size: 9, weight: .semibold))
+                    .foregroundStyle(.secondary)
+                Spacer()
+                Text(chartWindowText)
+                    .font(.caption2)
+                    .foregroundStyle(.tertiary)
+            }
             if monitor.history.isEmpty {
                 Image(systemName: "waveform.path.ecg")
                     .font(.title2)
@@ -350,6 +372,13 @@ private struct PingMenu: View {
         return end.addingTimeInterval(-monitor.settings.chartWindow)...end
     }
 
+    private var chartWindowText: String {
+        let seconds = monitor.settings.chartWindow
+        if seconds >= 3_600 { return "Last \(Int(seconds / 3_600))h" }
+        if seconds >= 60 { return "Last \(Int(seconds / 60))m" }
+        return "Last \(Int(seconds))s"
+    }
+
     private var lastCheckCard: some View {
         HStack(spacing: 7) {
             Image(systemName: "clock")
@@ -384,7 +413,89 @@ private struct PingMenu: View {
 
     private var lastCheckText: String {
         guard let date = monitor.lastCheckedAt else { return "--:--:--" }
-        return date.formatted(date: .omitted, time: .standard)
+        return Self.lastCheckFormatter.string(from: date)
+    }
+
+    private static let lastCheckFormatter: DateFormatter = {
+        let formatter = DateFormatter()
+        formatter.locale = Locale(identifier: "en_US_POSIX")
+        formatter.dateFormat = "HH:mm:ss"
+        return formatter
+    }()
+}
+
+private struct WindowDragRegion: NSViewRepresentable {
+    func makeNSView(context: Context) -> NSView { DraggingView() }
+    func updateNSView(_ nsView: NSView, context: Context) {}
+
+    private final class DraggingView: NSView {
+        override var acceptsFirstResponder: Bool { true }
+
+        override func mouseDown(with event: NSEvent) {
+            window?.performDrag(with: event)
+        }
+    }
+}
+
+private struct PanelWindowBehavior: NSViewRepresentable {
+    func makeNSView(context: Context) -> NSView { PanelBehaviorView() }
+    func updateNSView(_ nsView: NSView, context: Context) {}
+
+    private final class PanelBehaviorView: NSView {
+        private var isObservingScreenChanges = false
+
+        override func viewDidMoveToWindow() {
+            super.viewDidMoveToWindow()
+            window?.isMovable = true
+            constrainWindow()
+
+            if window != nil, !isObservingScreenChanges {
+                NotificationCenter.default.addObserver(
+                    self,
+                    selector: #selector(screenParametersDidChange),
+                    name: NSApplication.didChangeScreenParametersNotification,
+                    object: nil
+                )
+                NotificationCenter.default.addObserver(
+                    self,
+                    selector: #selector(windowFrameDidChange),
+                    name: NSWindow.didMoveNotification,
+                    object: window
+                )
+                NotificationCenter.default.addObserver(
+                    self,
+                    selector: #selector(windowFrameDidChange),
+                    name: NSWindow.didResizeNotification,
+                    object: window
+                )
+                isObservingScreenChanges = true
+            } else if window == nil, isObservingScreenChanges {
+                NotificationCenter.default.removeObserver(self)
+                isObservingScreenChanges = false
+            }
+        }
+
+        @objc private func screenParametersDidChange() {
+            constrainWindow()
+        }
+
+        @objc private func windowFrameDidChange() {
+            constrainWindow()
+        }
+
+        private func constrainWindow() {
+            guard let window, let screen = window.screen ?? NSScreen.main else { return }
+            var frame = window.frame
+            let safeFrame = screen.visibleFrame
+            let menuBarBottom = screen.frame.maxY - NSStatusBar.system.thickness
+            let maximumY = min(safeFrame.maxY, menuBarBottom)
+
+            frame.origin.x = min(max(frame.origin.x, safeFrame.minX), safeFrame.maxX - frame.width)
+            frame.origin.y = min(max(frame.origin.y, safeFrame.minY), maximumY - frame.height)
+            if frame != window.frame {
+                window.setFrame(frame, display: true, animate: false)
+            }
+        }
     }
 }
 

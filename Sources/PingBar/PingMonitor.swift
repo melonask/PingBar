@@ -48,6 +48,31 @@ final class PingMonitor: ObservableObject {
         return String(format: "%.3f ms", latencyMilliseconds)
     }
 
+    var menuBarStatusText: String {
+        Self.compactLatencyText(milliseconds: latencyMilliseconds)
+    }
+
+    static func compactLatencyText(milliseconds: Double?) -> String {
+        guard let milliseconds, milliseconds.isFinite, milliseconds >= 0 else { return "-- ms" }
+
+        let roundedMilliseconds = milliseconds.rounded()
+        if roundedMilliseconds < 1_000 {
+            return String(format: "%03.0f ms", roundedMilliseconds)
+        }
+
+        let seconds = milliseconds / 1_000
+        if seconds < 10 {
+            return String(format: "%.2f s", seconds)
+        }
+        if seconds < 100 {
+            return String(format: "%.1f s", seconds)
+        }
+        if seconds < 9_999.5 {
+            return String(format: "%.0f s", seconds)
+        }
+        return "9999+s"
+    }
+
     func setMenuBarMode(_ rawValue: String) {
         let mode = MenuBarDisplayMode(rawValue: rawValue) ?? .circleAndTime
         menuBarMode = mode

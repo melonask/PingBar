@@ -46,31 +46,44 @@ struct SettingsView: View {
                 }
 
                 settingCard("Menu Bar", systemImage: "menubar.rectangle") {
+                    HStack {
+                        Text("Preview")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                        Spacer()
+                        menuBarPreview
+                    }
+                    .padding(9)
+                    .background(.quaternary.opacity(0.55), in: RoundedRectangle(cornerRadius: 8))
                     HStack(spacing: 8) {
                         ForEach(MenuBarDisplayMode.allCases) { mode in
                             modeButton(mode)
                         }
                     }
-                    Text("Choose exactly what PingBar displays in the system menu bar.")
+                    Text("Choose exactly what PingBar keeps visible in the system menu bar.")
                         .font(.caption)
                         .foregroundStyle(.secondary)
-                    Divider()
-                    HStack {
-                        Text("Circle style")
-                        Spacer()
-                        Picker("Circle style", selection: circleStyleBinding) {
-                            ForEach(CircleStyle.allCases) { style in
-                                Text(style.title).tag(style.rawValue)
+                    if monitor.menuBarMode != .time {
+                        Divider()
+                        HStack {
+                            Text("Circle style")
+                            Spacer()
+                            Picker("Circle style", selection: circleStyleBinding) {
+                                ForEach(CircleStyle.allCases) { style in
+                                    Text(style.title).tag(style.rawValue)
+                                }
                             }
+                            .labelsHidden()
+                            .pickerStyle(.segmented)
+                            .frame(width: 170)
                         }
-                        .labelsHidden()
-                        .pickerStyle(.segmented)
-                        .frame(width: 190)
+                        Divider()
+                        valueRow("Circle size", value: menuBarCircleSizeBinding, unit: "pt")
                     }
-                    Divider()
-                    valueRow("Text size", value: menuBarTextSizeBinding, unit: "pt")
-                    Divider()
-                    valueRow("Circle size", value: menuBarCircleSizeBinding, unit: "pt")
+                    if monitor.menuBarMode != .circle {
+                        Divider()
+                        valueRow("Time size", value: menuBarTextSizeBinding, unit: "pt")
+                    }
                 }
 
                 settingCard("Timing", systemImage: "clock") {
@@ -244,8 +257,8 @@ struct SettingsView: View {
                         }
                     }
                     if mode != .circle {
-                        Text("24.330 ms")
-                            .monospacedDigit()
+                        Text("024 ms")
+                            .fontDesign(.monospaced)
                     }
                 }
                 .font(.system(size: monitor.menuBarTextSize, weight: .medium))
@@ -273,6 +286,25 @@ struct SettingsView: View {
         .overlay {
             RoundedRectangle(cornerRadius: 8)
                 .stroke(monitor.menuBarMode == mode ? Color.primary.opacity(0.35) : Color.secondary.opacity(0.18))
+        }
+    }
+
+    private var menuBarPreview: some View {
+        HStack(spacing: 5) {
+            if monitor.menuBarMode != .time {
+                if monitor.circleStyle == .colored {
+                    Text("🟢")
+                        .font(.system(size: monitor.menuBarCircleSize))
+                } else {
+                    Text("●")
+                        .font(.system(size: monitor.menuBarCircleSize, weight: .bold, design: .rounded))
+                }
+            }
+            if monitor.menuBarMode != .circle {
+                Text(monitor.menuBarStatusText)
+                    .font(.system(size: monitor.menuBarTextSize, weight: .medium, design: .monospaced))
+                    .frame(width: monitor.menuBarTextSize * 3.8, alignment: .trailing)
+            }
         }
     }
 
