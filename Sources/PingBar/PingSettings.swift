@@ -1,7 +1,7 @@
 import Foundation
 
 struct PingSettings: Equatable, Sendable {
-    static let defaultURL = "https://fast.com"
+    static let defaultURL = "https://www.chess.com"
     static let defaultInterval = 1.0
     static let defaultTimeout = 5.0
     static let defaultYellowFailures = 2

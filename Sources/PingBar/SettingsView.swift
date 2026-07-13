@@ -37,7 +37,7 @@ struct SettingsView: View {
                     HStack(spacing: 8) {
                         Image(systemName: "link")
                             .foregroundStyle(.secondary)
-                        TextField("Website URL", text: $url, prompt: Text("https://fast.com"))
+                        TextField("Website URL", text: $url, prompt: Text(PingSettings.defaultURL))
                             .textFieldStyle(.roundedBorder)
                     }
                     Label(urlValidationText, systemImage: isValidURL ? "checkmark.circle.fill" : "xmark.circle.fill")

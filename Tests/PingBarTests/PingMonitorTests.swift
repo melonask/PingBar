@@ -4,6 +4,12 @@ import Testing
 
 @MainActor
 struct PingMonitorTests {
+    @Test func defaultEndpointIsChessDotCom() throws {
+        let defaults = try makeDefaults()
+
+        #expect(PingSettings.load(from: defaults).urlString == "https://www.chess.com")
+    }
+
     @Test func successfulPingRecordsLatencyAndResetsFailures() async throws {
         let defaults = try makeDefaults()
         let monitor = PingMonitor(client: StubClient(results: [

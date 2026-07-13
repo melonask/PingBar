@@ -91,7 +91,7 @@ private struct PingMenu: View {
             }
         }
         .preferredColorScheme(monitor.appearance.colorScheme)
-        .background(PanelWindowBehavior())
+        .background(PanelWindowBehavior(appearance: monitor.appearance))
         .transaction { transaction in
             transaction.animation = nil
         }
@@ -473,15 +473,26 @@ private struct WindowDragRegion: NSViewRepresentable {
 }
 
 private struct PanelWindowBehavior: NSViewRepresentable {
-    func makeNSView(context: Context) -> NSView { PanelBehaviorView() }
-    func updateNSView(_ nsView: NSView, context: Context) {}
+    let appearance: AppAppearance
+
+    func makeNSView(context: Context) -> NSView {
+        let view = PanelBehaviorView()
+        view.apply(appearance)
+        return view
+    }
+
+    func updateNSView(_ nsView: NSView, context: Context) {
+        (nsView as? PanelBehaviorView)?.apply(appearance)
+    }
 
     private final class PanelBehaviorView: NSView {
         private var isObservingScreenChanges = false
+        private var selectedAppearance = AppAppearance.system
 
         override func viewDidMoveToWindow() {
             super.viewDidMoveToWindow()
             window?.isMovable = true
+            apply(selectedAppearance)
 
             if window != nil, !isObservingScreenChanges {
                 window?.alphaValue = 0
@@ -517,6 +528,15 @@ private struct PanelWindowBehavior: NSViewRepresentable {
             } else if window == nil, isObservingScreenChanges {
                 NotificationCenter.default.removeObserver(self)
                 isObservingScreenChanges = false
+            }
+        }
+
+        func apply(_ appearance: AppAppearance) {
+            selectedAppearance = appearance
+            window?.appearance = switch appearance {
+            case .system: nil
+            case .light: NSAppearance(named: .aqua)
+            case .dark: NSAppearance(named: .darkAqua)
             }
         }
 
