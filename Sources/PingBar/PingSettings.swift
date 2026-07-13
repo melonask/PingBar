@@ -2,6 +2,7 @@ import Foundation
 
 struct PingSettings: Equatable, Sendable {
     static let defaultURL = "https://www.chess.com"
+    private static let previousDefaultURL = "https://fast.com"
     static let defaultInterval = 1.0
     static let defaultTimeout = 5.0
     static let defaultYellowFailures = 2
@@ -64,6 +65,7 @@ struct PingSettings: Equatable, Sendable {
     }
 
     static func load(from defaults: UserDefaults = .standard) -> PingSettings {
+        migrateDefaultURL(in: defaults)
         defaults.register(defaults: [
             Keys.url: defaultURL,
             Keys.interval: defaultInterval,
@@ -99,8 +101,17 @@ struct PingSettings: Equatable, Sendable {
         )
     }
 
+    private static func migrateDefaultURL(in defaults: UserDefaults) {
+        guard defaults.integer(forKey: Keys.defaultURLMigrationVersion) < 1 else { return }
+        if defaults.string(forKey: Keys.url) == previousDefaultURL {
+            defaults.set(defaultURL, forKey: Keys.url)
+        }
+        defaults.set(1, forKey: Keys.defaultURLMigrationVersion)
+    }
+
     enum Keys {
         static let url = "pingURL"
+        static let defaultURLMigrationVersion = "defaultURLMigrationVersion"
         static let interval = "pingInterval"
         static let timeout = "requestTimeout"
         static let yellowFailures = "yellowFailureThreshold"

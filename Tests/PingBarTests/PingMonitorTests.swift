@@ -10,6 +10,17 @@ struct PingMonitorTests {
         #expect(PingSettings.load(from: defaults).urlString == "https://www.chess.com")
     }
 
+    @Test func previousDefaultEndpointMigratesButCustomEndpointDoesNot() throws {
+        let oldDefaults = try makeDefaults()
+        oldDefaults.set("https://fast.com", forKey: PingSettings.Keys.url)
+        #expect(PingSettings.load(from: oldDefaults).urlString == "https://www.chess.com")
+        #expect(oldDefaults.string(forKey: PingSettings.Keys.url) == "https://www.chess.com")
+
+        let customDefaults = try makeDefaults()
+        customDefaults.set("https://example.com/health", forKey: PingSettings.Keys.url)
+        #expect(PingSettings.load(from: customDefaults).urlString == "https://example.com/health")
+    }
+
     @Test func successfulPingRecordsLatencyAndResetsFailures() async throws {
         let defaults = try makeDefaults()
         let monitor = PingMonitor(client: StubClient(results: [
