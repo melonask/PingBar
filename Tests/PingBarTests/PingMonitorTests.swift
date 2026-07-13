@@ -75,13 +75,24 @@ struct PingMonitorTests {
         monitor.setMenuBarTextSize(13)
         monitor.setMenuBarCircleSize(11)
         monitor.setCircleStyle(CircleStyle.monochrome.rawValue)
+        monitor.setPanelTransparency(false)
 
         #expect(monitor.menuBarMode == .time)
         #expect(monitor.menuBarTextSize == 13)
         #expect(monitor.menuBarCircleSize == 11)
         #expect(monitor.circleStyle == .monochrome)
+        #expect(!monitor.panelTransparency)
         #expect(defaults.string(forKey: PingSettings.Keys.menuBarMode) == MenuBarDisplayMode.time.rawValue)
         #expect(defaults.string(forKey: PingSettings.Keys.circleStyle) == CircleStyle.monochrome.rawValue)
+        #expect(!defaults.bool(forKey: PingSettings.Keys.panelTransparency))
+    }
+
+    @Test func panelTransparencyDefaultsToEnabled() throws {
+        let defaults = try makeDefaults()
+        let monitor = PingMonitor(client: StubClient(results: []), defaults: defaults)
+
+        #expect(monitor.panelTransparency)
+        #expect(monitor.settings.panelTransparency)
     }
 
     private func makeDefaults() throws -> UserDefaults {

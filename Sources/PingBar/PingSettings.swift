@@ -13,6 +13,7 @@ struct PingSettings: Equatable, Sendable {
     static let defaultMenuBarTextSize = 9.0
     static let defaultMenuBarCircleSize = 7.0
     static let defaultCircleStyle = CircleStyle.colored.rawValue
+    static let defaultPanelTransparency = true
 
     var urlString: String
     var interval: Double
@@ -26,6 +27,7 @@ struct PingSettings: Equatable, Sendable {
     var menuBarTextSize: Double
     var menuBarCircleSize: Double
     var circleStyle: String
+    var panelTransparency: Bool
 
     init(
         urlString: String = defaultURL,
@@ -39,7 +41,8 @@ struct PingSettings: Equatable, Sendable {
         menuBarMode: String = defaultMenuBarMode,
         menuBarTextSize: Double = defaultMenuBarTextSize,
         menuBarCircleSize: Double = defaultMenuBarCircleSize,
-        circleStyle: String = defaultCircleStyle
+        circleStyle: String = defaultCircleStyle,
+        panelTransparency: Bool = defaultPanelTransparency
     ) {
         self.urlString = urlString
         self.interval = interval
@@ -53,6 +56,7 @@ struct PingSettings: Equatable, Sendable {
         self.menuBarTextSize = menuBarTextSize
         self.menuBarCircleSize = menuBarCircleSize
         self.circleStyle = circleStyle
+        self.panelTransparency = panelTransparency
     }
 
     static func load(from defaults: UserDefaults = .standard) -> PingSettings {
@@ -68,7 +72,8 @@ struct PingSettings: Equatable, Sendable {
             Keys.menuBarMode: defaultMenuBarMode,
             Keys.menuBarTextSize: defaultMenuBarTextSize,
             Keys.menuBarCircleSize: defaultMenuBarCircleSize,
-            Keys.circleStyle: defaultCircleStyle
+            Keys.circleStyle: defaultCircleStyle,
+            Keys.panelTransparency: defaultPanelTransparency
         ])
 
         return PingSettings(
@@ -83,7 +88,8 @@ struct PingSettings: Equatable, Sendable {
             menuBarMode: defaults.string(forKey: Keys.menuBarMode) ?? defaultMenuBarMode,
             menuBarTextSize: defaults.double(forKey: Keys.menuBarTextSize),
             menuBarCircleSize: defaults.double(forKey: Keys.menuBarCircleSize),
-            circleStyle: defaults.string(forKey: Keys.circleStyle) ?? defaultCircleStyle
+            circleStyle: defaults.string(forKey: Keys.circleStyle) ?? defaultCircleStyle,
+            panelTransparency: defaults.bool(forKey: Keys.panelTransparency)
         )
     }
 
@@ -100,6 +106,9 @@ struct PingSettings: Equatable, Sendable {
         static let menuBarTextSize = "menuBarTextSize"
         static let menuBarCircleSize = "menuBarCircleSize"
         static let circleStyle = "menuBarCircleStyle"
+        static let panelTransparency = "panelTransparency"
+        static let panelOriginX = "panelOriginX"
+        static let panelOriginY = "panelOriginY"
     }
 }
 

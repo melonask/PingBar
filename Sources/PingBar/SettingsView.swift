@@ -86,6 +86,13 @@ struct SettingsView: View {
                     }
                 }
 
+                settingCard("Panel", systemImage: "rectangle.on.rectangle") {
+                    Toggle("Transparent background", isOn: panelTransparencyBinding)
+                    Text("Use the macOS translucent material on both Status and Settings.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+
                 settingCard("Timing", systemImage: "clock") {
                     valueRow("Check interval", value: $interval, unit: "seconds")
                     Divider()
@@ -225,6 +232,7 @@ struct SettingsView: View {
         monitor.setMenuBarTextSize(PingSettings.defaultMenuBarTextSize)
         monitor.setMenuBarCircleSize(PingSettings.defaultMenuBarCircleSize)
         monitor.setCircleStyle(PingSettings.defaultCircleStyle)
+        monitor.setPanelTransparency(PingSettings.defaultPanelTransparency)
     }
 
     private var isValidURL: Bool {
@@ -327,6 +335,13 @@ struct SettingsView: View {
         Binding(
             get: { monitor.circleStyle.rawValue },
             set: { monitor.setCircleStyle($0) }
+        )
+    }
+
+    private var panelTransparencyBinding: Binding<Bool> {
+        Binding(
+            get: { monitor.panelTransparency },
+            set: { monitor.setPanelTransparency($0) }
         )
     }
 }

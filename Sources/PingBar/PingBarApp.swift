@@ -80,6 +80,11 @@ private struct PingMenu: View {
                 }
         }
         .frame(width: Self.panelWidth, alignment: .top)
+        .background {
+            if !monitor.panelTransparency {
+                Color(nsColor: .windowBackgroundColor)
+            }
+        }
         .background(PanelWindowBehavior())
         .transaction { transaction in
             transaction.animation = nil
@@ -110,7 +115,6 @@ private struct PingMenu: View {
             SettingsView(monitor: monitor)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
-        .background(Color(nsColor: .windowBackgroundColor))
     }
 
     private var dragStrip: some View {
@@ -444,7 +448,10 @@ private struct WindowDragRegion: NSViewRepresentable {
         override func acceptsFirstMouse(for event: NSEvent?) -> Bool { true }
 
         override func mouseDown(with event: NSEvent) {
-            window?.performDrag(with: event)
+            guard let window else { return }
+            window.performDrag(with: event)
+            UserDefaults.standard.set(window.frame.origin.x, forKey: PingSettings.Keys.panelOriginX)
+            UserDefaults.standard.set(window.frame.origin.y, forKey: PingSettings.Keys.panelOriginY)
         }
     }
 }
@@ -459,6 +466,7 @@ private struct PanelWindowBehavior: NSViewRepresentable {
         override func viewDidMoveToWindow() {
             super.viewDidMoveToWindow()
             window?.isMovable = true
+            restoreWindowPosition()
             constrainWindow()
 
             if window != nil, !isObservingScreenChanges {
@@ -472,6 +480,12 @@ private struct PanelWindowBehavior: NSViewRepresentable {
                     self,
                     selector: #selector(windowFrameDidChange),
                     name: NSWindow.didMoveNotification,
+                    object: window
+                )
+                NotificationCenter.default.addObserver(
+                    self,
+                    selector: #selector(restoreWindowPosition),
+                    name: NSWindow.didBecomeKeyNotification,
                     object: window
                 )
                 NotificationCenter.default.addObserver(
@@ -495,6 +509,21 @@ private struct PanelWindowBehavior: NSViewRepresentable {
             constrainWindow()
         }
 
+        @objc private func restoreWindowPosition() {
+            let defaults = UserDefaults.standard
+            guard let window,
+                  defaults.object(forKey: PingSettings.Keys.panelOriginX) != nil,
+                  defaults.object(forKey: PingSettings.Keys.panelOriginY) != nil else {
+                return
+            }
+
+            window.setFrameOrigin(NSPoint(
+                x: defaults.double(forKey: PingSettings.Keys.panelOriginX),
+                y: defaults.double(forKey: PingSettings.Keys.panelOriginY)
+            ))
+            constrainWindow()
+        }
+
         private func constrainWindow() {
             guard let window, let screen = window.screen ?? NSScreen.main else { return }
             var frame = window.frame
@@ -506,6 +535,11 @@ private struct PanelWindowBehavior: NSViewRepresentable {
             frame.origin.y = min(max(frame.origin.y, safeFrame.minY), maximumY - frame.height)
             if frame != window.frame {
                 window.setFrame(frame, display: true, animate: false)
+                let defaults = UserDefaults.standard
+                if defaults.object(forKey: PingSettings.Keys.panelOriginX) != nil {
+                    defaults.set(frame.origin.x, forKey: PingSettings.Keys.panelOriginX)
+                    defaults.set(frame.origin.y, forKey: PingSettings.Keys.panelOriginY)
+                }
             }
         }
     }
