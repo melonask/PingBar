@@ -2,6 +2,7 @@ import SwiftUI
 
 struct SettingsView: View {
     @ObservedObject var monitor: PingMonitor
+    @State private var showingRestoreConfirmation = false
     @AppStorage(PingSettings.Keys.url) private var url = PingSettings.defaultURL
     @AppStorage(PingSettings.Keys.interval) private var interval = PingSettings.defaultInterval
     @AppStorage(PingSettings.Keys.timeout) private var timeout = PingSettings.defaultTimeout
@@ -157,12 +158,23 @@ struct SettingsView: View {
                         .font(.caption)
                         .foregroundStyle(.green)
                     Spacer()
-                    Button("Restore Defaults", action: restoreDefaults)
+                    Button("Restore Defaults…") {
+                        showingRestoreConfirmation = true
+                    }
                 }
             }
             .padding(16)
         }
         .scrollIndicators(.visible)
+        .confirmationDialog(
+            "Restore all settings?",
+            isPresented: $showingRestoreConfirmation
+        ) {
+            Button("Restore Defaults", role: .destructive, action: restoreDefaults)
+            Button("Cancel", role: .cancel) {}
+        } message: {
+            Text("This resets the endpoint, timing, thresholds, menu-bar display, and panel appearance.")
+        }
         .onChange(of: yellowFailures) { _, value in
             if redFailures <= value { redFailures = value + 1 }
         }
