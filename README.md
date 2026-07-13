@@ -39,6 +39,8 @@ Only continue if you downloaded PingBar from this repository's GitHub Releases p
 
 If **Open** is not available, try launching the app once, then open **System Settings → Privacy & Security**, scroll to the Security section, and click **Open Anyway** next to the PingBar message.
 
+<img src="SystemSettings-PrivacySecurity-OpenAnyway.png" alt="Open Anyway in macOS Privacy and Security settings" width="900">
+
 As a final option for a trusted download, remove only PingBar's quarantine attribute in Terminal:
 
 ```sh

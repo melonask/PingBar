@@ -87,10 +87,20 @@ private struct PingMenu: View {
                     Divider()
                     SettingsView(monitor: monitor)
                 }
-                .frame(width: 470, height: 610)
             } else {
                 statusView
             }
+        }
+        .frame(
+            width: showingSettings ? 470 : 360,
+            height: showingSettings ? 610 : nil,
+            alignment: .top
+        )
+        .transaction { transaction in
+            transaction.animation = nil
+        }
+        .onReceive(NotificationCenter.default.publisher(for: NSWindow.didResignKeyNotification)) { _ in
+            showingSettings = false
         }
         .onDisappear { showingSettings = false }
         .onAppear { showingSettings = false }
