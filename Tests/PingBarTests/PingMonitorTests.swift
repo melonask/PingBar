@@ -54,11 +54,14 @@ struct PingMonitorTests {
         monitor.setMenuBarMode(MenuBarDisplayMode.time.rawValue)
         monitor.setMenuBarTextSize(13)
         monitor.setMenuBarCircleSize(11)
+        monitor.setCircleStyle(CircleStyle.monochrome.rawValue)
 
         #expect(monitor.menuBarMode == .time)
         #expect(monitor.menuBarTextSize == 13)
         #expect(monitor.menuBarCircleSize == 11)
+        #expect(monitor.circleStyle == .monochrome)
         #expect(defaults.string(forKey: PingSettings.Keys.menuBarMode) == MenuBarDisplayMode.time.rawValue)
+        #expect(defaults.string(forKey: PingSettings.Keys.circleStyle) == CircleStyle.monochrome.rawValue)
     }
 
     private func makeDefaults() throws -> UserDefaults {

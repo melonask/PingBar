@@ -55,6 +55,19 @@ struct SettingsView: View {
                         .font(.caption)
                         .foregroundStyle(.secondary)
                     Divider()
+                    HStack {
+                        Text("Circle style")
+                        Spacer()
+                        Picker("Circle style", selection: circleStyleBinding) {
+                            ForEach(CircleStyle.allCases) { style in
+                                Text(style.title).tag(style.rawValue)
+                            }
+                        }
+                        .labelsHidden()
+                        .pickerStyle(.segmented)
+                        .frame(width: 190)
+                    }
+                    Divider()
                     valueRow("Text size", value: menuBarTextSizeBinding, unit: "pt")
                     Divider()
                     valueRow("Circle size", value: menuBarCircleSizeBinding, unit: "pt")
@@ -198,6 +211,7 @@ struct SettingsView: View {
         monitor.setMenuBarMode(PingSettings.defaultMenuBarMode)
         monitor.setMenuBarTextSize(PingSettings.defaultMenuBarTextSize)
         monitor.setMenuBarCircleSize(PingSettings.defaultMenuBarCircleSize)
+        monitor.setCircleStyle(PingSettings.defaultCircleStyle)
     }
 
     private var isValidURL: Bool {
@@ -221,9 +235,13 @@ struct SettingsView: View {
             VStack(spacing: 8) {
                 HStack(spacing: 4) {
                     if mode != .time {
-                        Circle()
-                            .fill(.green)
-                            .frame(width: monitor.menuBarCircleSize, height: monitor.menuBarCircleSize)
+                        if monitor.circleStyle == .colored {
+                            Text("🟢")
+                                .font(.system(size: monitor.menuBarCircleSize))
+                        } else {
+                            Text("●")
+                                .font(.system(size: monitor.menuBarCircleSize, weight: .bold, design: .rounded))
+                        }
                     }
                     if mode != .circle {
                         Text("24.330 ms")
@@ -269,6 +287,13 @@ struct SettingsView: View {
         Binding(
             get: { monitor.menuBarCircleSize },
             set: { monitor.setMenuBarCircleSize($0) }
+        )
+    }
+
+    private var circleStyleBinding: Binding<String> {
+        Binding(
+            get: { monitor.circleStyle.rawValue },
+            set: { monitor.setCircleStyle($0) }
         )
     }
 }

@@ -33,8 +33,14 @@ private struct MenuBarStatusLabel: View {
     }
 
     private var labelText: Text {
-        let circle = Text(statusEmoji)
-            .font(.system(size: monitor.menuBarCircleSize))
+        let circle: Text = switch monitor.circleStyle {
+        case .colored:
+            Text(statusEmoji)
+                .font(.system(size: monitor.menuBarCircleSize))
+        case .monochrome:
+            Text("●")
+                .font(.system(size: monitor.menuBarCircleSize, weight: .bold, design: .rounded))
+        }
         let time = Text(monitor.statusText)
             .font(.system(size: monitor.menuBarTextSize, weight: .medium, design: .monospaced))
 

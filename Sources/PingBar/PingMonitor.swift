@@ -18,6 +18,7 @@ final class PingMonitor: ObservableObject {
     @Published private(set) var menuBarMode: MenuBarDisplayMode
     @Published private(set) var menuBarTextSize: Double
     @Published private(set) var menuBarCircleSize: Double
+    @Published private(set) var circleStyle: CircleStyle
 
     private let client: any PingClient
     private let defaults: UserDefaults
@@ -31,6 +32,7 @@ final class PingMonitor: ObservableObject {
         menuBarMode = MenuBarDisplayMode(rawValue: settings.menuBarMode) ?? .circleAndTime
         menuBarTextSize = settings.menuBarTextSize
         menuBarCircleSize = settings.menuBarCircleSize
+        circleStyle = CircleStyle(rawValue: settings.circleStyle) ?? .colored
     }
 
     var settings: PingSettings { PingSettings.load(from: defaults) }
@@ -60,6 +62,12 @@ final class PingMonitor: ObservableObject {
     func setMenuBarCircleSize(_ value: Double) {
         menuBarCircleSize = min(max(value.rounded(), 5), 14)
         defaults.set(menuBarCircleSize, forKey: PingSettings.Keys.menuBarCircleSize)
+    }
+
+    func setCircleStyle(_ rawValue: String) {
+        let style = CircleStyle(rawValue: rawValue) ?? .colored
+        circleStyle = style
+        defaults.set(style.rawValue, forKey: PingSettings.Keys.circleStyle)
     }
 
     func start() {
