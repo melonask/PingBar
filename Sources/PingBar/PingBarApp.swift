@@ -28,38 +28,26 @@ private struct MenuBarStatusLabel: View {
         }
     }
 
-    @ViewBuilder
     var body: some View {
-        switch monitor.menuBarMode {
-        case .circle:
-            circle
-        case .circleAndTime:
-            HStack(spacing: 5) {
-                circle
-                time
-            }
-            .fixedSize()
-        case .time:
-            time
-        }
+        labelText.fixedSize()
     }
 
-    @ViewBuilder
-    private var circle: some View {
-        if monitor.circleStyle == .colored {
+    private var labelText: Text {
+        let circle: Text = if monitor.circleStyle == .colored {
             Text(statusEmoji)
                 .font(.system(size: monitor.menuBarCircleSize))
         } else {
             Text("●")
                 .font(.system(size: monitor.menuBarCircleSize, weight: .bold, design: .rounded))
         }
-    }
-
-    private var time: some View {
-        Text(monitor.menuBarStatusText)
+        let time = Text(monitor.menuBarStatusText)
             .font(.system(size: monitor.menuBarTextSize, weight: .medium, design: .monospaced))
-            .lineLimit(1)
-            .fixedSize()
+
+        return switch monitor.menuBarMode {
+        case .circle: circle
+        case .circleAndTime: circle + Text(" ") + time
+        case .time: time
+        }
     }
 
     private var statusEmoji: String {
@@ -131,7 +119,7 @@ private struct PingMenu: View {
                 .foregroundStyle(.tertiary)
         }
         .frame(maxWidth: .infinity)
-        .frame(height: 30)
+        .frame(height: 40)
         .contentShape(Rectangle())
         .overlay(WindowDragRegion())
         .help("Drag to move PingBar")
@@ -451,13 +439,7 @@ private struct WindowDragRegion: NSViewRepresentable {
 
         override func acceptsFirstMouse(for event: NSEvent?) -> Bool { true }
 
-        override func resetCursorRects() {
-            addCursorRect(bounds, cursor: .openHand)
-        }
-
         override func mouseDown(with event: NSEvent) {
-            NSCursor.closedHand.push()
-            defer { NSCursor.pop() }
             window?.performDrag(with: event)
         }
     }
