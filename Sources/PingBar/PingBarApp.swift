@@ -61,7 +61,6 @@ private struct MenuBarStatusLabel: View {
 
 private struct PingMenu: View {
     private static let panelWidth = 420.0
-    private static let panelHeight = 520.0
 
     @ObservedObject var monitor: PingMonitor
     @State private var showingSettings = false
@@ -70,36 +69,17 @@ private struct PingMenu: View {
         VStack(spacing: 0) {
             dragStrip
             Divider()
-            ZStack(alignment: .top) {
-                if showingSettings {
-                    VStack(spacing: 0) {
-                        HStack {
-                            Button { showingSettings = false } label: {
-                                Label("Status", systemImage: "chevron.left")
-                            }
-                            .buttonStyle(.plain)
-                            .foregroundStyle(.secondary)
-                            Spacer()
-                            Label("Settings", systemImage: "gearshape.fill")
-                                .font(.caption.weight(.semibold))
-                                .foregroundStyle(.secondary)
-                        }
-                        .padding(.horizontal, 16)
-                        .frame(height: 42)
-                        Divider()
-                        SettingsView(monitor: monitor)
+            statusView
+                .opacity(showingSettings ? 0 : 1)
+                .accessibilityHidden(showingSettings)
+                .allowsHitTesting(!showingSettings)
+                .overlay(alignment: .top) {
+                    if showingSettings {
+                        settingsView
                     }
-                } else {
-                    statusView
                 }
-            }
-            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
         }
-        .frame(
-            width: Self.panelWidth,
-            height: Self.panelHeight,
-            alignment: .top
-        )
+        .frame(width: Self.panelWidth, alignment: .top)
         .background(PanelWindowBehavior())
         .transaction { transaction in
             transaction.animation = nil
@@ -109,6 +89,28 @@ private struct PingMenu: View {
         }
         .onDisappear { showingSettings = false }
         .onAppear { showingSettings = false }
+    }
+
+    private var settingsView: some View {
+        VStack(spacing: 0) {
+            HStack {
+                Button { showingSettings = false } label: {
+                    Label("Status", systemImage: "chevron.left")
+                }
+                .buttonStyle(.plain)
+                .foregroundStyle(.secondary)
+                Spacer()
+                Label("Settings", systemImage: "gearshape.fill")
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(.secondary)
+            }
+            .padding(.horizontal, 16)
+            .frame(height: 42)
+            Divider()
+            SettingsView(monitor: monitor)
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+        .background(Color(nsColor: .windowBackgroundColor))
     }
 
     private var dragStrip: some View {
