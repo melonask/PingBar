@@ -53,7 +53,7 @@ final class PingMonitor: ObservableObject {
     }
 
     static func compactLatencyText(milliseconds: Double?) -> String {
-        guard let milliseconds, milliseconds.isFinite, milliseconds >= 0 else { return "-- ms" }
+        guard let milliseconds, milliseconds.isFinite, milliseconds >= 0 else { return " -- ms" }
 
         let roundedMilliseconds = milliseconds.rounded()
         if roundedMilliseconds < 1_000 {
@@ -68,7 +68,8 @@ final class PingMonitor: ObservableObject {
             return String(format: "%.1f s", seconds)
         }
         if seconds < 9_999.5 {
-            return String(format: "%.0f s", seconds)
+            let text = String(format: "%.0f s", seconds)
+            return String(repeating: " ", count: 6 - text.count) + text
         }
         return "9999+s"
     }

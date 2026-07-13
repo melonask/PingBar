@@ -23,13 +23,22 @@ struct PingMonitorTests {
     }
 
     @Test func compactLatencyUsesStableSixCharacterValues() {
-        #expect(PingMonitor.compactLatencyText(milliseconds: 12.3456) == "012 ms")
-        #expect(PingMonitor.compactLatencyText(milliseconds: 123.456) == "123 ms")
-        #expect(PingMonitor.compactLatencyText(milliseconds: 123.556) == "124 ms")
-        #expect(PingMonitor.compactLatencyText(milliseconds: 999.6) == "1.00 s")
-        #expect(PingMonitor.compactLatencyText(milliseconds: 12_345) == "12.3 s")
-        #expect(PingMonitor.compactLatencyText(milliseconds: 123_456) == "123 s")
-        #expect(PingMonitor.compactLatencyText(milliseconds: 10_000_000) == "9999+s")
+        let values: [(Double?, String)] = [
+            (nil, " -- ms"),
+            (12.3456, "012 ms"),
+            (123.456, "123 ms"),
+            (123.556, "124 ms"),
+            (999.6, "1.00 s"),
+            (12_345, "12.3 s"),
+            (123_456, " 123 s"),
+            (10_000_000, "9999+s")
+        ]
+
+        for (milliseconds, expected) in values {
+            let text = PingMonitor.compactLatencyText(milliseconds: milliseconds)
+            #expect(text == expected)
+            #expect(text.count == 6)
+        }
     }
 
     @Test func thresholdsControlYellowAndRedLevels() async throws {

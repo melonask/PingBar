@@ -28,18 +28,20 @@ private struct MenuBarStatusLabel: View {
         }
     }
 
+    @ViewBuilder
     var body: some View {
-        HStack(spacing: 5) {
-            if monitor.menuBarMode != .time {
+        switch monitor.menuBarMode {
+        case .circle:
+            circle
+        case .circleAndTime:
+            HStack(spacing: 5) {
                 circle
+                time
             }
-            if monitor.menuBarMode != .circle {
-                Text(monitor.menuBarStatusText)
-                    .font(.system(size: monitor.menuBarTextSize, weight: .medium, design: .monospaced))
-                    .frame(width: monitor.menuBarTextSize * 3.8, alignment: .trailing)
-            }
+            .fixedSize()
+        case .time:
+            time
         }
-        .fixedSize()
     }
 
     @ViewBuilder
@@ -51,6 +53,13 @@ private struct MenuBarStatusLabel: View {
             Text("●")
                 .font(.system(size: monitor.menuBarCircleSize, weight: .bold, design: .rounded))
         }
+    }
+
+    private var time: some View {
+        Text(monitor.menuBarStatusText)
+            .font(.system(size: monitor.menuBarTextSize, weight: .medium, design: .monospaced))
+            .lineLimit(1)
+            .fixedSize()
     }
 
     private var statusEmoji: String {
@@ -69,29 +78,31 @@ private struct PingMenu: View {
     @State private var showingSettings = false
 
     var body: some View {
-        ZStack {
-            if showingSettings {
-                VStack(spacing: 0) {
-                    HStack {
-                        Button { showingSettings = false } label: {
-                            Label("Status", systemImage: "chevron.left")
-                        }
-                        .buttonStyle(.plain)
-                        .foregroundStyle(.secondary)
-                        Spacer()
-                        Label("Settings", systemImage: "gearshape.fill")
-                            .font(.caption.weight(.semibold))
+        VStack(spacing: 0) {
+            dragStrip
+            Divider()
+            ZStack {
+                if showingSettings {
+                    VStack(spacing: 0) {
+                        HStack {
+                            Button { showingSettings = false } label: {
+                                Label("Status", systemImage: "chevron.left")
+                            }
+                            .buttonStyle(.plain)
                             .foregroundStyle(.secondary)
-                            .padding(.vertical, 10)
-                            .background(WindowDragRegion())
+                            Spacer()
+                            Label("Settings", systemImage: "gearshape.fill")
+                                .font(.caption.weight(.semibold))
+                                .foregroundStyle(.secondary)
+                        }
+                        .padding(.horizontal, 16)
+                        .frame(height: 42)
+                        Divider()
+                        SettingsView(monitor: monitor)
                     }
-                    .padding(.horizontal, 16)
-                    .frame(height: 42)
-                    Divider()
-                    SettingsView(monitor: monitor)
+                } else {
+                    statusView
                 }
-            } else {
-                statusView
             }
         }
         .frame(
@@ -110,17 +121,24 @@ private struct PingMenu: View {
         .onAppear { showingSettings = false }
     }
 
+    private var dragStrip: some View {
+        HStack(spacing: 7) {
+            Capsule()
+                .fill(.tertiary)
+                .frame(width: 38, height: 4)
+            Text("Drag to move")
+                .font(.system(size: 9, weight: .medium))
+                .foregroundStyle(.tertiary)
+        }
+        .frame(maxWidth: .infinity)
+        .frame(height: 30)
+        .contentShape(Rectangle())
+        .overlay(WindowDragRegion())
+        .help("Drag to move PingBar")
+    }
+
     private var statusView: some View {
         VStack(alignment: .leading, spacing: 14) {
-            HStack {
-                Capsule()
-                    .fill(.tertiary)
-                    .frame(width: 34, height: 4)
-            }
-            .frame(maxWidth: .infinity)
-            .frame(height: 8)
-            .background(WindowDragRegion())
-
             HStack(spacing: 11) {
                 ZStack {
                     RoundedRectangle(cornerRadius: 10)
@@ -431,7 +449,15 @@ private struct WindowDragRegion: NSViewRepresentable {
     private final class DraggingView: NSView {
         override var acceptsFirstResponder: Bool { true }
 
+        override func acceptsFirstMouse(for event: NSEvent?) -> Bool { true }
+
+        override func resetCursorRects() {
+            addCursorRect(bounds, cursor: .openHand)
+        }
+
         override func mouseDown(with event: NSEvent) {
+            NSCursor.closedHand.push()
+            defer { NSCursor.pop() }
             window?.performDrag(with: event)
         }
     }

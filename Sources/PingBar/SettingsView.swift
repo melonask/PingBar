@@ -303,7 +303,8 @@ struct SettingsView: View {
             if monitor.menuBarMode != .circle {
                 Text(monitor.menuBarStatusText)
                     .font(.system(size: monitor.menuBarTextSize, weight: .medium, design: .monospaced))
-                    .frame(width: monitor.menuBarTextSize * 3.8, alignment: .trailing)
+                    .lineLimit(1)
+                    .fixedSize()
             }
         }
     }
