@@ -61,6 +61,7 @@ private struct MenuBarStatusLabel: View {
 
 private struct PingMenu: View {
     private static let panelWidth = 420.0
+    private static let panelHeight = 520.0
 
     @ObservedObject var monitor: PingMonitor
     @State private var showingSettings = false
@@ -69,7 +70,7 @@ private struct PingMenu: View {
         VStack(spacing: 0) {
             dragStrip
             Divider()
-            ZStack {
+            ZStack(alignment: .top) {
                 if showingSettings {
                     VStack(spacing: 0) {
                         HStack {
@@ -92,10 +93,11 @@ private struct PingMenu: View {
                     statusView
                 }
             }
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
         }
         .frame(
             width: Self.panelWidth,
-            height: showingSettings ? 610 : nil,
+            height: Self.panelHeight,
             alignment: .top
         )
         .background(PanelWindowBehavior())

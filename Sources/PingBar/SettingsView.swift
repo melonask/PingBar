@@ -142,7 +142,7 @@ struct SettingsView: View {
             }
             .padding(16)
         }
-        .scrollIndicators(.never)
+        .scrollIndicators(.visible)
         .onChange(of: yellowFailures) { _, value in
             if redFailures <= value { redFailures = value + 1 }
         }
