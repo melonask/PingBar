@@ -471,9 +471,9 @@ private struct PanelWindowBehavior: NSViewRepresentable {
         override func viewDidMoveToWindow() {
             super.viewDidMoveToWindow()
             window?.isMovable = true
-            restoreWindowPosition()
 
             if window != nil, !isObservingScreenChanges {
+                window?.alphaValue = 0
                 NotificationCenter.default.addObserver(
                     self,
                     selector: #selector(screenParametersDidChange),
@@ -482,17 +482,27 @@ private struct PanelWindowBehavior: NSViewRepresentable {
                 )
                 NotificationCenter.default.addObserver(
                     self,
-                    selector: #selector(schedulePositionRestore),
+                    selector: #selector(revealWindow),
                     name: NSWindow.didBecomeKeyNotification,
                     object: window
                 )
                 NotificationCenter.default.addObserver(
                     self,
-                    selector: #selector(schedulePositionRestore),
+                    selector: #selector(hideWindow),
+                    name: NSWindow.didResignKeyNotification,
+                    object: window
+                )
+                NotificationCenter.default.addObserver(
+                    self,
+                    selector: #selector(windowDidResize),
                     name: NSWindow.didResizeNotification,
                     object: window
                 )
                 isObservingScreenChanges = true
+                restoreWindowPosition()
+                if window?.isKeyWindow == true {
+                    window?.alphaValue = 1
+                }
             } else if window == nil, isObservingScreenChanges {
                 NotificationCenter.default.removeObserver(self)
                 isObservingScreenChanges = false
@@ -503,13 +513,17 @@ private struct PanelWindowBehavior: NSViewRepresentable {
             restoreWindowPosition()
         }
 
-        @objc private func schedulePositionRestore() {
-            NSObject.cancelPreviousPerformRequests(
-                withTarget: self,
-                selector: #selector(restoreWindowPosition),
-                object: nil
-            )
-            perform(#selector(restoreWindowPosition), with: nil, afterDelay: 0)
+        @objc private func revealWindow() {
+            restoreWindowPosition()
+            window?.alphaValue = 1
+        }
+
+        @objc private func hideWindow() {
+            window?.alphaValue = 0
+        }
+
+        @objc private func windowDidResize() {
+            restoreWindowPosition()
         }
 
         @objc private func restoreWindowPosition() {
