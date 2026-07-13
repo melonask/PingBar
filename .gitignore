@@ -1,0 +1,8 @@
+.build/
+.swiftpm/
+PingBar.app/
+.DS_Store
+DerivedData/
+*.xcuserstate
+.env
+.env.*
