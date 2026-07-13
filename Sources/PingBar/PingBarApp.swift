@@ -60,21 +60,26 @@ private struct MenuBarStatusLabel: View {
 }
 
 private struct PingMenu: View {
+    private enum Page {
+        case status
+        case settings
+    }
+
     private static let panelWidth = 420.0
 
     @ObservedObject var monitor: PingMonitor
-    @State private var showingSettings = false
+    @State private var page = Page.status
 
     var body: some View {
         VStack(spacing: 0) {
             dragStrip
             Divider()
             statusView
-                .opacity(showingSettings ? 0 : 1)
-                .accessibilityHidden(showingSettings)
-                .allowsHitTesting(!showingSettings)
+                .opacity(page == .settings ? 0 : 1)
+                .accessibilityHidden(page == .settings)
+                .allowsHitTesting(page == .status)
                 .overlay(alignment: .top) {
-                    if showingSettings {
+                    if page == .settings {
                         settingsView
                     }
                 }
@@ -90,16 +95,16 @@ private struct PingMenu: View {
             transaction.animation = nil
         }
         .onReceive(NotificationCenter.default.publisher(for: NSWindow.didResignKeyNotification)) { _ in
-            showingSettings = false
+            page = .status
         }
-        .onDisappear { showingSettings = false }
-        .onAppear { showingSettings = false }
+        .onDisappear { page = .status }
+        .onAppear { page = .status }
     }
 
     private var settingsView: some View {
         VStack(spacing: 0) {
             HStack {
-                Button { showingSettings = false } label: {
+                Button { page = .status } label: {
                     Label("Status", systemImage: "chevron.left")
                 }
                 .buttonStyle(.plain)
@@ -225,7 +230,7 @@ private struct PingMenu: View {
                 }
                 Spacer()
                 Button {
-                    showingSettings = true
+                    page = .settings
                 } label: {
                     Label("Settings", systemImage: "gearshape")
                 }
@@ -450,8 +455,8 @@ private struct WindowDragRegion: NSViewRepresentable {
         override func mouseDown(with event: NSEvent) {
             guard let window else { return }
             window.performDrag(with: event)
-            UserDefaults.standard.set(window.frame.origin.x, forKey: PingSettings.Keys.panelOriginX)
-            UserDefaults.standard.set(window.frame.origin.y, forKey: PingSettings.Keys.panelOriginY)
+            PanelPlacement.constrain(window)
+            PanelPlacement.save(window)
         }
     }
 }
@@ -467,7 +472,6 @@ private struct PanelWindowBehavior: NSViewRepresentable {
             super.viewDidMoveToWindow()
             window?.isMovable = true
             restoreWindowPosition()
-            constrainWindow()
 
             if window != nil, !isObservingScreenChanges {
                 NotificationCenter.default.addObserver(
@@ -478,19 +482,13 @@ private struct PanelWindowBehavior: NSViewRepresentable {
                 )
                 NotificationCenter.default.addObserver(
                     self,
-                    selector: #selector(windowFrameDidChange),
-                    name: NSWindow.didMoveNotification,
-                    object: window
-                )
-                NotificationCenter.default.addObserver(
-                    self,
-                    selector: #selector(restoreWindowPosition),
+                    selector: #selector(schedulePositionRestore),
                     name: NSWindow.didBecomeKeyNotification,
                     object: window
                 )
                 NotificationCenter.default.addObserver(
                     self,
-                    selector: #selector(windowFrameDidChange),
+                    selector: #selector(schedulePositionRestore),
                     name: NSWindow.didResizeNotification,
                     object: window
                 )
@@ -502,46 +500,96 @@ private struct PanelWindowBehavior: NSViewRepresentable {
         }
 
         @objc private func screenParametersDidChange() {
-            constrainWindow()
+            restoreWindowPosition()
         }
 
-        @objc private func windowFrameDidChange() {
-            constrainWindow()
+        @objc private func schedulePositionRestore() {
+            NSObject.cancelPreviousPerformRequests(
+                withTarget: self,
+                selector: #selector(restoreWindowPosition),
+                object: nil
+            )
+            perform(#selector(restoreWindowPosition), with: nil, afterDelay: 0)
         }
 
         @objc private func restoreWindowPosition() {
-            let defaults = UserDefaults.standard
-            guard let window,
-                  defaults.object(forKey: PingSettings.Keys.panelOriginX) != nil,
-                  defaults.object(forKey: PingSettings.Keys.panelOriginY) != nil else {
-                return
-            }
-
-            window.setFrameOrigin(NSPoint(
-                x: defaults.double(forKey: PingSettings.Keys.panelOriginX),
-                y: defaults.double(forKey: PingSettings.Keys.panelOriginY)
-            ))
-            constrainWindow()
-        }
-
-        private func constrainWindow() {
-            guard let window, let screen = window.screen ?? NSScreen.main else { return }
-            var frame = window.frame
-            let safeFrame = screen.visibleFrame
-            let menuBarBottom = screen.frame.maxY - NSStatusBar.system.thickness
-            let maximumY = min(safeFrame.maxY, menuBarBottom)
-
-            frame.origin.x = min(max(frame.origin.x, safeFrame.minX), safeFrame.maxX - frame.width)
-            frame.origin.y = min(max(frame.origin.y, safeFrame.minY), maximumY - frame.height)
-            if frame != window.frame {
-                window.setFrame(frame, display: true, animate: false)
-                let defaults = UserDefaults.standard
-                if defaults.object(forKey: PingSettings.Keys.panelOriginX) != nil {
-                    defaults.set(frame.origin.x, forKey: PingSettings.Keys.panelOriginX)
-                    defaults.set(frame.origin.y, forKey: PingSettings.Keys.panelOriginY)
-                }
+            guard let window else { return }
+            if PanelPlacement.hasSavedPosition {
+                PanelPlacement.restore(window)
+            } else {
+                PanelPlacement.constrain(window)
             }
         }
+    }
+}
+
+@MainActor
+private enum PanelPlacement {
+    static var hasSavedPosition: Bool {
+        let defaults = UserDefaults.standard
+        let hasTopLeft = defaults.object(forKey: PingSettings.Keys.panelPositionX) != nil
+            && defaults.object(forKey: PingSettings.Keys.panelPositionTop) != nil
+        let hasLegacyOrigin = defaults.object(forKey: PingSettings.Keys.panelOriginX) != nil
+            && defaults.object(forKey: PingSettings.Keys.panelOriginY) != nil
+        return hasTopLeft || hasLegacyOrigin
+    }
+
+    static func save(_ window: NSWindow) {
+        let defaults = UserDefaults.standard
+        defaults.set(window.frame.minX, forKey: PingSettings.Keys.panelPositionX)
+        defaults.set(window.frame.maxY, forKey: PingSettings.Keys.panelPositionTop)
+        defaults.removeObject(forKey: PingSettings.Keys.panelOriginX)
+        defaults.removeObject(forKey: PingSettings.Keys.panelOriginY)
+    }
+
+    static func restore(_ window: NSWindow) {
+        guard let topLeft = savedTopLeft(for: window) else { return }
+        var frame = window.frame
+        frame.origin = NSPoint(x: topLeft.x, y: topLeft.y - frame.height)
+        window.setFrame(constrained(frame, for: window), display: true, animate: false)
+        save(window)
+    }
+
+    static func constrain(_ window: NSWindow) {
+        let frame = constrained(window.frame, for: window)
+        if frame != window.frame {
+            window.setFrame(frame, display: true, animate: false)
+        }
+    }
+
+    private static func savedTopLeft(for window: NSWindow) -> NSPoint? {
+        let defaults = UserDefaults.standard
+        if defaults.object(forKey: PingSettings.Keys.panelPositionX) != nil,
+           defaults.object(forKey: PingSettings.Keys.panelPositionTop) != nil {
+            return NSPoint(
+                x: defaults.double(forKey: PingSettings.Keys.panelPositionX),
+                y: defaults.double(forKey: PingSettings.Keys.panelPositionTop)
+            )
+        }
+
+        guard defaults.object(forKey: PingSettings.Keys.panelOriginX) != nil,
+              defaults.object(forKey: PingSettings.Keys.panelOriginY) != nil else {
+            return nil
+        }
+        return NSPoint(
+            x: defaults.double(forKey: PingSettings.Keys.panelOriginX),
+            y: defaults.double(forKey: PingSettings.Keys.panelOriginY) + window.frame.height
+        )
+    }
+
+    private static func constrained(_ frame: NSRect, for window: NSWindow) -> NSRect {
+        let topLeft = NSPoint(x: frame.minX, y: frame.maxY - 1)
+        let screen = NSScreen.screens.first(where: { $0.frame.contains(topLeft) })
+            ?? window.screen
+            ?? NSScreen.main
+        guard let screen else { return frame }
+
+        var result = frame
+        let safeFrame = screen.visibleFrame
+        let maximumY = min(safeFrame.maxY, screen.frame.maxY - NSStatusBar.system.thickness)
+        result.origin.x = min(max(result.minX, safeFrame.minX), safeFrame.maxX - result.width)
+        result.origin.y = min(max(result.minY, safeFrame.minY), maximumY - result.height)
+        return result
     }
 }
 

@@ -107,6 +107,8 @@ struct PingSettings: Equatable, Sendable {
         static let menuBarCircleSize = "menuBarCircleSize"
         static let circleStyle = "menuBarCircleStyle"
         static let panelTransparency = "panelTransparency"
+        static let panelPositionX = "panelPositionX"
+        static let panelPositionTop = "panelPositionTop"
         static let panelOriginX = "panelOriginX"
         static let panelOriginY = "panelOriginY"
     }
