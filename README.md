@@ -19,7 +19,7 @@ A native macOS menu-bar HTTP availability and latency monitor built with SwiftUI
 ## Requirements
 
 - macOS 14 or newer
-- Xcode with Swift 6 when building from source
+- Xcode 26.6 with Swift 6 when building from source
 
 ## Download
 
