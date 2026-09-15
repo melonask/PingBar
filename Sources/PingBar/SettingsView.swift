@@ -4,6 +4,8 @@ struct SettingsView: View {
     @ObservedObject var monitor: PingMonitor
     @State private var showingRestoreConfirmation = false
     @AppStorage(PingSettings.Keys.url) private var url = PingSettings.defaultURL
+    @AppStorage(PingSettings.Keys.targetType) private var targetType = PingSettings.defaultTargetType
+    @AppStorage(PingSettings.Keys.pingHost) private var pingHost = PingSettings.defaultPingHost
     @AppStorage(PingSettings.Keys.interval) private var interval = PingSettings.defaultInterval
     @AppStorage(PingSettings.Keys.timeout) private var timeout = PingSettings.defaultTimeout
     @AppStorage(PingSettings.Keys.yellowFailures) private var yellowFailures = PingSettings.defaultYellowFailures
@@ -15,35 +17,61 @@ struct SettingsView: View {
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 14) {
-                HStack(spacing: 12) {
-                    ZStack {
-                        RoundedRectangle(cornerRadius: 11)
-                            .fill(.primary)
-                        Image(systemName: "waveform.path.ecg")
-                            .font(.system(size: 22, weight: .semibold))
-                            .foregroundStyle(Color(nsColor: .windowBackgroundColor))
-                    }
-                    .frame(width: 44, height: 44)
-
+                HStack(alignment: .center, spacing: 12) {
                     VStack(alignment: .leading, spacing: 3) {
-                        Text("Ping Settings")
+                        Text("Settings")
                             .font(.title2.weight(.semibold))
-                        Text("Saved automatically and applied to the next check.")
+                        Text("Tune monitoring and appearance.")
                             .font(.caption)
                             .foregroundStyle(.secondary)
                     }
+                    Spacer()
+                    Label("Auto-saved", systemImage: "checkmark.circle.fill")
+                        .font(.caption.weight(.medium))
+                        .foregroundStyle(.green)
+                        .padding(.horizontal, 9)
+                        .padding(.vertical, 5)
+                        .background(.green.opacity(0.1), in: Capsule())
                 }
 
-                settingCard("Endpoint", systemImage: "network") {
-                    HStack(spacing: 8) {
-                        Image(systemName: "link")
-                            .foregroundStyle(.secondary)
-                        TextField("Website URL", text: $url, prompt: Text(PingSettings.defaultURL))
-                            .textFieldStyle(.roundedBorder)
+                settingCard("Target", systemImage: "scope") {
+                    HStack {
+                        Text("Check type")
+                        Spacer()
+                        Picker("Check type", selection: $targetType) {
+                            ForEach(TargetType.allCases) { type in
+                                Text(type.title).tag(type.rawValue)
+                            }
+                        }
+                        .labelsHidden()
+                        .pickerStyle(.segmented)
+                        .frame(width: 190)
                     }
-                    Label(urlValidationText, systemImage: isValidURL ? "checkmark.circle.fill" : "xmark.circle.fill")
+                    Divider()
+                    if targetType == TargetType.icmp.rawValue {
+                        HStack(spacing: 8) {
+                            Image(systemName: "network")
+                                .foregroundStyle(.secondary)
+                            TextField("Device address", text: $pingHost, prompt: Text(PingSettings.defaultPingHost))
+                                .textFieldStyle(.roundedBorder)
+                        }
+                        Label(pingHostValidationText, systemImage: isValidPingHost ? "checkmark.circle.fill" : "xmark.circle.fill")
+                            .font(.caption)
+                            .foregroundStyle(isValidPingHost ? .green : .red)
+                    } else {
+                        HStack(spacing: 8) {
+                            Image(systemName: "link")
+                                .foregroundStyle(.secondary)
+                            TextField("Website URL", text: $url, prompt: Text(PingSettings.defaultURL))
+                                .textFieldStyle(.roundedBorder)
+                        }
+                        Label(urlValidationText, systemImage: isValidURL ? "checkmark.circle.fill" : "xmark.circle.fill")
+                            .font(.caption)
+                            .foregroundStyle(isValidURL ? .green : .red)
+                    }
+                    Text("HTTP monitors a website; Ping measures round trips to a device such as a router or another computer on your network.")
                         .font(.caption)
-                        .foregroundStyle(isValidURL ? .green : .red)
+                        .foregroundStyle(.secondary)
                 }
 
                 settingCard("Menu Bar", systemImage: "menubar.rectangle") {
@@ -105,15 +133,25 @@ struct SettingsView: View {
                     Text("Use the macOS translucent material on both Status and Settings.")
                         .font(.caption)
                         .foregroundStyle(.secondary)
+                    Divider()
+                    Toggle("Always on top", isOn: alwaysOnTopBinding)
+                    Text("Keep the panel visible above all other windows while open.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
                 }
 
-                settingCard("Timing", systemImage: "clock") {
+                settingCard("Monitoring", systemImage: "clock") {
                     valueRow("Check interval", value: $interval, unit: "seconds")
                     Divider()
                     valueRow("Request timeout", value: $timeout, unit: "seconds")
+                    Divider()
+                    valueRow("Chart window", value: $chartWindow, unit: "seconds")
+                    Text("Checks run automatically; history keeps only the selected time window.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
                 }
 
-                settingCard("Failure Colors", systemImage: "circle.inset.filled") {
+                settingCard("Connection Health", systemImage: "circle.inset.filled") {
                     thresholdRow(color: .yellow, title: "Show yellow", value: $yellowFailures)
                     Divider()
                     thresholdRow(color: .red, title: "Show red", value: $redFailures)
@@ -122,41 +160,36 @@ struct SettingsView: View {
                         .foregroundStyle(.secondary)
                 }
 
-                settingCard("Successful HTTP Responses", systemImage: "checkmark.circle") {
-                    HStack {
-                        VStack(alignment: .leading, spacing: 4) {
-                            Text("Minimum")
-                                .font(.caption)
-                                .foregroundStyle(.secondary)
-                            TextField("Minimum", value: $minimumStatus, format: .number)
-                                .textFieldStyle(.roundedBorder)
+                if targetType == TargetType.http.rawValue {
+                    settingCard("HTTP Response Range", systemImage: "checkmark.circle") {
+                        HStack {
+                            VStack(alignment: .leading, spacing: 4) {
+                                Text("Minimum")
+                                    .font(.caption)
+                                    .foregroundStyle(.secondary)
+                                TextField("Minimum", value: $minimumStatus, format: .number)
+                                    .textFieldStyle(.roundedBorder)
+                            }
+                            Image(systemName: "ellipsis")
+                                .foregroundStyle(.tertiary)
+                            VStack(alignment: .leading, spacing: 4) {
+                                Text("Maximum")
+                                    .font(.caption)
+                                    .foregroundStyle(.secondary)
+                                TextField("Maximum", value: $maximumStatus, format: .number)
+                                    .textFieldStyle(.roundedBorder)
+                            }
                         }
-                        Image(systemName: "ellipsis")
-                            .foregroundStyle(.tertiary)
-                        VStack(alignment: .leading, spacing: 4) {
-                            Text("Maximum")
-                                .font(.caption)
-                                .foregroundStyle(.secondary)
-                            TextField("Maximum", value: $maximumStatus, format: .number)
-                                .textFieldStyle(.roundedBorder)
-                        }
+                        Text("Responses outside this inclusive range count as failures.")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
                     }
-                    Text("Responses outside this inclusive range count as failures.")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                }
-
-                settingCard("Chart", systemImage: "chart.xyaxis.line") {
-                    valueRow("Time window", value: $chartWindow, unit: "seconds")
-                    Text("The chart shows checks from the most recent time window.")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
                 }
 
                 HStack {
-                    Label("All changes are saved", systemImage: "checkmark.circle.fill")
+                    Text("Restore every preference to its original value.")
                         .font(.caption)
-                        .foregroundStyle(.green)
+                        .foregroundStyle(.secondary)
                     Spacer()
                     Button("Restore Defaults…") {
                         showingRestoreConfirmation = true
@@ -173,11 +206,14 @@ struct SettingsView: View {
             Button("Restore Defaults", role: .destructive, action: restoreDefaults)
             Button("Cancel", role: .cancel) {}
         } message: {
-            Text("This resets the endpoint, timing, thresholds, menu-bar display, and panel appearance.")
+            Text("This resets the target, timing, thresholds, menu-bar display, and panel appearance.")
         }
         .onChange(of: yellowFailures) { _, value in
             if redFailures <= value { redFailures = value + 1 }
         }
+        .onChange(of: targetType) { monitor.refreshSettings() }
+        .onChange(of: url) { monitor.refreshSettings() }
+        .onChange(of: pingHost) { monitor.refreshSettings() }
         .onChange(of: interval) { _, value in interval = max(value, 0.1) }
         .onChange(of: timeout) { _, value in timeout = max(value, 0.1) }
         .onChange(of: chartWindow) { _, value in chartWindow = min(max(value, 60), 86_400) }
@@ -195,21 +231,25 @@ struct SettingsView: View {
         systemImage: String,
         @ViewBuilder content: () -> Content
     ) -> some View {
-        GroupBox {
-            VStack(alignment: .leading, spacing: 10) {
-                HStack(spacing: 8) {
-                    Image(systemName: systemImage)
-                        .font(.system(size: 11, weight: .semibold))
-                        .foregroundStyle(.primary)
-                        .frame(width: 24, height: 24)
-                        .background(.quaternary, in: RoundedRectangle(cornerRadius: 6))
-                    Text(title)
-                        .font(.headline)
-                }
-                content()
+        VStack(alignment: .leading, spacing: 10) {
+            HStack(spacing: 8) {
+                Image(systemName: systemImage)
+                    .font(.system(size: 11, weight: .semibold))
+                    .foregroundStyle(Color.accentColor)
+                    .frame(width: 22, height: 22)
+                    .background(Color.accentColor.opacity(0.1), in: RoundedRectangle(cornerRadius: 6))
+                Text(title)
+                    .font(.headline)
             }
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .padding(4)
+            Divider()
+            content()
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(12)
+        .background(.quaternary.opacity(0.32), in: RoundedRectangle(cornerRadius: 12))
+        .overlay {
+            RoundedRectangle(cornerRadius: 12)
+                .stroke(Color.secondary.opacity(0.1), lineWidth: 0.7)
         }
     }
 
@@ -234,7 +274,7 @@ struct SettingsView: View {
                 .frame(width: 9, height: 9)
             Text(title)
             Spacer()
-            Stepper(value: value, in: 1...1000) {
+            Stepper(value: value, in: 1...1_000) {
                 Text("after \(value.wrappedValue)")
                     .monospacedDigit()
                     .frame(width: 66, alignment: .trailing)
@@ -246,6 +286,8 @@ struct SettingsView: View {
 
     private func restoreDefaults() {
         url = PingSettings.defaultURL
+        targetType = PingSettings.defaultTargetType
+        pingHost = PingSettings.defaultPingHost
         interval = PingSettings.defaultInterval
         timeout = PingSettings.defaultTimeout
         yellowFailures = PingSettings.defaultYellowFailures
@@ -259,20 +301,20 @@ struct SettingsView: View {
         monitor.setCircleStyle(PingSettings.defaultCircleStyle)
         monitor.setPanelTransparency(PingSettings.defaultPanelTransparency)
         monitor.setAppearance(PingSettings.defaultAppearance)
+        monitor.setAlwaysOnTop(PingSettings.defaultAlwaysOnTop)
+        monitor.refreshSettings()
     }
 
-    private var isValidURL: Bool {
-        guard let value = URL(string: url.trimmingCharacters(in: .whitespacesAndNewlines)),
-              let scheme = value.scheme?.lowercased(),
-              ["http", "https"].contains(scheme),
-              value.host != nil else {
-            return false
-        }
-        return true
-    }
+    private var isValidURL: Bool { PingSettings.isValidHTTPURL(url) }
 
     private var urlValidationText: String {
         isValidURL ? "Ready to monitor" : "Enter a complete HTTP or HTTPS URL"
+    }
+
+    private var isValidPingHost: Bool { PingSettings.isValidPingHost(pingHost) }
+
+    private var pingHostValidationText: String {
+        isValidPingHost ? "Ready to ping" : "Enter an IP address or hostname"
     }
 
     private func modeButton(_ mode: MenuBarDisplayMode) -> some View {
@@ -368,6 +410,13 @@ struct SettingsView: View {
         Binding(
             get: { monitor.panelTransparency },
             set: { monitor.setPanelTransparency($0) }
+        )
+    }
+
+    private var alwaysOnTopBinding: Binding<Bool> {
+        Binding(
+            get: { monitor.alwaysOnTop },
+            set: { monitor.setAlwaysOnTop($0) }
         )
     }
 

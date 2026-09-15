@@ -1,0 +1,37 @@
+# PingBar SwiftLint configuration
+
+excluded:
+  - .build
+  - PingBar.app
+
+identifier_name:
+  excluded:
+    - id
+    - ip
+    - x
+    - y
+    - z
+
+line_length:
+  warning: 150
+  error: 200
+
+file_length:
+  warning: 900
+  error: 1200
+
+type_body_length:
+  warning: 450
+  error: 550
+
+function_body_length:
+  warning: 80
+  error: 120
+
+nesting:
+  type_level: 2
+
+# The panel view removes its own notification observers when it detaches;
+# that is a valid AppKit lifecycle pattern, not a mistake.
+disabled_rules:
+  - notification_center_detachment

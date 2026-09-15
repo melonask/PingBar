@@ -21,25 +21,47 @@ final class PingMonitor: ObservableObject {
     @Published private(set) var circleStyle: CircleStyle
     @Published private(set) var panelTransparency: Bool
     @Published private(set) var appearance: AppAppearance
+    @Published private(set) var alwaysOnTop: Bool
+    @Published private(set) var publicIPLocation: PublicIPLocation?
+    @Published private(set) var publicIPLookupFailed = false
+    @Published private var cachedSettings: PingSettings
 
     private let client: any PingClient
+    private let locationClient: any PublicIPLocationClient
     private let defaults: UserDefaults
     private var loopTask: Task<Void, Never>?
+    private var locationTask: Task<Void, Never>?
     private var checkTask: Task<PingResponse, Error>?
+    private var activeCheckID: UUID?
 
-    init(client: any PingClient = HTTPPingClient(), defaults: UserDefaults = .standard) {
+    init(
+        client: any PingClient = RouterPingClient(),
+        locationClient: any PublicIPLocationClient = IPLocationService(),
+        defaults: UserDefaults = .standard
+    ) {
         let settings = PingSettings.load(from: defaults)
         self.client = client
+        self.locationClient = locationClient
         self.defaults = defaults
+        cachedSettings = settings
         menuBarMode = MenuBarDisplayMode(rawValue: settings.menuBarMode) ?? .circleAndTime
         menuBarTextSize = settings.menuBarTextSize
         menuBarCircleSize = settings.menuBarCircleSize
         circleStyle = CircleStyle(rawValue: settings.circleStyle) ?? .colored
         panelTransparency = settings.panelTransparency
         appearance = AppAppearance(rawValue: settings.appearance) ?? .system
+        alwaysOnTop = settings.alwaysOnTop
     }
 
-    var settings: PingSettings { PingSettings.load(from: defaults) }
+    var settings: PingSettings { cachedSettings }
+
+    var target: PingTarget {
+        let whitespace = CharacterSet.whitespacesAndNewlines
+        if cachedSettings.targetType == TargetType.icmp.rawValue {
+            return PingTarget(type: .icmp, address: cachedSettings.pingHost.trimmingCharacters(in: whitespace))
+        }
+        return PingTarget(type: .http, address: cachedSettings.urlString.trimmingCharacters(in: whitespace))
+    }
 
     var level: StatusLevel {
         if consecutiveFailures >= settings.redFailures { return .red }
@@ -48,8 +70,7 @@ final class PingMonitor: ObservableObject {
     }
 
     var statusText: String {
-        guard let latencyMilliseconds else { return "-- ms" }
-        return String(format: "%.3f ms", latencyMilliseconds)
+        Self.displayLatencyText(milliseconds: latencyMilliseconds)
     }
 
     var menuBarStatusText: String {
@@ -76,6 +97,21 @@ final class PingMonitor: ObservableObject {
             return String(repeating: " ", count: 6 - text.count) + text
         }
         return "9999+s"
+    }
+
+    static func displayLatencyText(milliseconds: Double?) -> String {
+        guard let milliseconds, milliseconds.isFinite, milliseconds >= 0 else { return "-- ms" }
+        if milliseconds < 1 { return "<1 ms" }
+
+        let roundedMilliseconds = milliseconds.rounded()
+        if roundedMilliseconds < 1_000 {
+            return String(format: "%.0f ms", roundedMilliseconds)
+        }
+
+        let seconds = milliseconds / 1_000
+        if seconds < 10 { return String(format: "%.2f s", seconds) }
+        if seconds < 100 { return String(format: "%.1f s", seconds) }
+        return String(format: "%.0f s", seconds)
     }
 
     func setMenuBarMode(_ rawValue: String) {
@@ -111,6 +147,18 @@ final class PingMonitor: ObservableObject {
         defaults.set(value.rawValue, forKey: PingSettings.Keys.appearance)
     }
 
+    func setAlwaysOnTop(_ value: Bool) {
+        alwaysOnTop = value
+        defaults.set(value, forKey: PingSettings.Keys.alwaysOnTop)
+    }
+
+    func refreshSettings() {
+        let updatedSettings = PingSettings.load(from: defaults)
+        if updatedSettings != cachedSettings {
+            cachedSettings = updatedSettings
+        }
+    }
+
     func start() {
         guard loopTask == nil else { return }
         loopTask = Task { [weak self] in
@@ -121,29 +169,65 @@ final class PingMonitor: ObservableObject {
                 try? await Task.sleep(for: .seconds(delay))
             }
         }
+        startLocationUpdates()
     }
 
     func stop() {
         loopTask?.cancel()
         loopTask = nil
+        locationTask?.cancel()
+        locationTask = nil
         checkTask?.cancel()
         checkTask = nil
+        activeCheckID = nil
+    }
+
+    private func startLocationUpdates() {
+        guard locationTask == nil else { return }
+        locationTask = Task { [weak self] in
+            while !Task.isCancelled {
+                guard let self else { return }
+                do {
+                    let location = try await self.locationClient.locate()
+                    guard !Task.isCancelled else { return }
+                    self.publicIPLocation = location
+                    self.publicIPLookupFailed = false
+                } catch is CancellationError {
+                    return
+                } catch {
+                    // Keep the last known location during temporary provider
+                    // or network failures; retry at a deliberately low rate.
+                    self.publicIPLookupFailed = self.publicIPLocation == nil
+                }
+                try? await Task.sleep(for: .seconds(900))
+            }
+        }
     }
 
     func checkNow() async {
+        refreshSettings()
         checkTask?.cancel()
-        let task = Task { [client, settings] in
-            guard let url = Self.validURL(from: settings.urlString) else {
+
+        let target = self.target
+        let settings = self.settings
+        let checkID = UUID()
+        activeCheckID = checkID
+        let task = Task { [client, target, settings] in
+            guard Self.isValidTarget(target) else {
                 throw URLError(.badURL)
             }
-            return try await client.ping(url: url, timeout: max(settings.timeout, 0.1))
+            return try await client.ping(target: target, timeout: max(settings.timeout, 0.1))
         }
         checkTask = task
 
         do {
             let response = try await task.value
+            guard activeCheckID == checkID, !task.isCancelled else { return }
+            checkTask = nil
+            activeCheckID = nil
             lastCheckedAt = .now
-            guard settings.minimumStatus...settings.maximumStatus ~= response.statusCode else {
+            if target.type == .http,
+               !(settings.minimumStatus...settings.maximumStatus ~= response.statusCode) {
                 recordFailure("HTTP status \(response.statusCode)")
                 return
             }
@@ -155,6 +239,9 @@ final class PingMonitor: ObservableObject {
         } catch is CancellationError {
             return
         } catch {
+            guard activeCheckID == checkID else { return }
+            checkTask = nil
+            activeCheckID = nil
             lastCheckedAt = .now
             recordFailure(error.localizedDescription)
         }
@@ -174,14 +261,11 @@ final class PingMonitor: ObservableObject {
         history.removeAll { $0.date < cutoff }
     }
 
-    private static func validURL(from string: String) -> URL? {
-        guard let url = URL(string: string.trimmingCharacters(in: .whitespacesAndNewlines)),
-              let scheme = url.scheme?.lowercased(),
-              ["http", "https"].contains(scheme),
-              url.host != nil else {
-            return nil
+    private static func isValidTarget(_ target: PingTarget) -> Bool {
+        switch target.type {
+        case .http: PingSettings.isValidHTTPURL(target.address)
+        case .icmp: PingSettings.isValidPingHost(target.address)
         }
-        return url
     }
 }
 

@@ -12,20 +12,23 @@ A lightweight, native macOS menu-bar monitor for HTTP availability and latency. 
 | --- | --- |
 | ![PingBar status dashboard in dark mode](main.png) | ![PingBar settings in light mode](settings.png) |
 
-The status dashboard keeps current health, latency, recent history, and primary actions in one compact view. Settings uses the same panel footprint and scrolls independently, so switching pages does not move or resize the panel.
+The status dashboard keeps current health, latency, and recent history in one compact view. Settings uses the same panel footprint and scrolls independently, so switching pages does not move or resize the panel.
 
 ## Features
 
-- Configurable HTTP or HTTPS endpoint, interval, and timeout.
+- Monitor an HTTP or HTTPS endpoint, or ping a device on your local network (router, NAS, another computer) by IP address or hostname.
+- Configurable endpoint, interval, and timeout.
 - Green, yellow, and red availability states with configurable failure thresholds.
 - Current, average, and minimum latency with recent success rate.
+- Current public IP address with a compact dotted location map.
 - Live chart with green success segments and red failure markers.
 - Menu-bar display modes: circle, circle and time, or time.
 - Compact, fixed-width latency values that keep the menu-bar item stable.
 - Configurable menu-bar text size, circle size, HTTP success range, and chart window.
 - Movable status and settings panel with a shared compact footprint.
 - System, light, and dark appearances with optional macOS transparency.
-- Persistent panel position across checks, failures, and app launches.
+- Panel position persists across checks, failures, network changes, and app launches — it never resets automatically.
+- **Always on Top** keeps the panel visible above all other windows — it stays open until the feature is turned off.
 - Settings stored locally in macOS `UserDefaults`.
 
 ## Requirements
@@ -72,10 +75,12 @@ open /Applications/PingBar.app
 
 Click the PingBar item in the macOS menu bar to view current latency, recent statistics, availability history, and the last check time.
 
-- Click **Check Now** to run an immediate request.
-- Click **Settings** to configure the endpoint, timing, status thresholds, chart, and menu-bar appearance.
-- Click **Status** in the Settings header to return to the dashboard.
-- Drag the strip at the top of either page to move the panel.
+- PingBar checks automatically and resumes as soon as connectivity returns.
+- Click the **pin** button in the top-right header to keep the panel visible above all other windows while you work elsewhere.
+- Click the **gear** button in the header to open Settings; click it again or press **Command–Comma** to return to Status.
+- Click the **power** button in the top-left header to quit PingBar.
+- Drag the strip at the top of either page — or any empty area of the panel — to move it. The strip shows the current display and x/y position while you drag. The position is saved per display, so the panel reopens where you left it even after rearranging screens.
+- Enable **Always on top** under **Panel** in Settings — or click the header pin button — to keep the panel visible above all other windows. While it is on, the panel cannot be dismissed: it stays even when you click elsewhere or the network status changes. Turn **Always on top** off to close it normally.
 - Use **Circle**, **Circle + Time**, or **Time** to control the menu-bar display.
 - Choose **System**, **Light**, or **Dark** under **Panel** and optionally disable the transparent background.
 
@@ -89,11 +94,13 @@ Menu-bar latency is rounded and kept to six monospaced characters so its reserve
 | Yellow | Consecutive failures reached the configured warning threshold. |
 | Red | Consecutive failures reached the configured failure threshold. |
 
-A successful request resets the consecutive-failure counter. Responses outside the configured inclusive HTTP status range count as failures.
+A successful request resets the consecutive-failure counter. Responses outside the configured inclusive HTTP status range count as failures. When the target is a **Ping** device, latency is measured with ICMP round trips and the HTTP status range does not apply.
 
 ### Settings behavior
 
-Changes are saved automatically. Endpoint, interval, timeout, status thresholds, HTTP success range, chart history, menu-bar presentation, and panel appearance persist across launches. **Restore Defaults…** asks for confirmation before resetting all options.
+Changes are saved automatically. Target type and address, interval, timeout, status thresholds, HTTP success range, chart history, menu-bar presentation, panel appearance, and always-on-top persist across launches. **Restore Defaults…** asks for confirmation before resetting all options.
+
+PingBar refreshes its approximate public-IP location every 15 minutes using `ipwho.is`, with `ipinfo.io` as a fallback. The lookup is used only for the IP badge and micro-map and is not stored by PingBar.
 
 ## Develop
 

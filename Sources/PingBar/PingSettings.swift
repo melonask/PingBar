@@ -3,6 +3,8 @@ import Foundation
 struct PingSettings: Equatable, Sendable {
     static let defaultURL = "https://www.chess.com"
     private static let previousDefaultURL = "https://fast.com"
+    static let defaultTargetType = TargetType.http.rawValue
+    static let defaultPingHost = "192.168.1.1"
     static let defaultInterval = 1.0
     static let defaultTimeout = 5.0
     static let defaultYellowFailures = 2
@@ -16,8 +18,11 @@ struct PingSettings: Equatable, Sendable {
     static let defaultCircleStyle = CircleStyle.colored.rawValue
     static let defaultPanelTransparency = true
     static let defaultAppearance = AppAppearance.system.rawValue
+    static let defaultAlwaysOnTop = false
 
     var urlString: String
+    var targetType: String
+    var pingHost: String
     var interval: Double
     var timeout: Double
     var yellowFailures: Int
@@ -31,9 +36,12 @@ struct PingSettings: Equatable, Sendable {
     var circleStyle: String
     var panelTransparency: Bool
     var appearance: String
+    var alwaysOnTop: Bool
 
     init(
         urlString: String = defaultURL,
+        targetType: String = defaultTargetType,
+        pingHost: String = defaultPingHost,
         interval: Double = defaultInterval,
         timeout: Double = defaultTimeout,
         yellowFailures: Int = defaultYellowFailures,
@@ -46,9 +54,12 @@ struct PingSettings: Equatable, Sendable {
         menuBarCircleSize: Double = defaultMenuBarCircleSize,
         circleStyle: String = defaultCircleStyle,
         panelTransparency: Bool = defaultPanelTransparency,
-        appearance: String = defaultAppearance
+        appearance: String = defaultAppearance,
+        alwaysOnTop: Bool = defaultAlwaysOnTop
     ) {
         self.urlString = urlString
+        self.targetType = targetType
+        self.pingHost = pingHost
         self.interval = interval
         self.timeout = timeout
         self.yellowFailures = yellowFailures
@@ -62,12 +73,15 @@ struct PingSettings: Equatable, Sendable {
         self.circleStyle = circleStyle
         self.panelTransparency = panelTransparency
         self.appearance = appearance
+        self.alwaysOnTop = alwaysOnTop
     }
 
     static func load(from defaults: UserDefaults = .standard) -> PingSettings {
         migrateDefaultURL(in: defaults)
         defaults.register(defaults: [
             Keys.url: defaultURL,
+            Keys.targetType: defaultTargetType,
+            Keys.pingHost: defaultPingHost,
             Keys.interval: defaultInterval,
             Keys.timeout: defaultTimeout,
             Keys.yellowFailures: defaultYellowFailures,
@@ -80,11 +94,14 @@ struct PingSettings: Equatable, Sendable {
             Keys.menuBarCircleSize: defaultMenuBarCircleSize,
             Keys.circleStyle: defaultCircleStyle,
             Keys.panelTransparency: defaultPanelTransparency,
-            Keys.appearance: defaultAppearance
+            Keys.appearance: defaultAppearance,
+            Keys.alwaysOnTop: defaultAlwaysOnTop
         ])
 
         return PingSettings(
             urlString: defaults.string(forKey: Keys.url) ?? defaultURL,
+            targetType: defaults.string(forKey: Keys.targetType) ?? defaultTargetType,
+            pingHost: defaults.string(forKey: Keys.pingHost) ?? defaultPingHost,
             interval: defaults.double(forKey: Keys.interval),
             timeout: defaults.double(forKey: Keys.timeout),
             yellowFailures: defaults.integer(forKey: Keys.yellowFailures),
@@ -97,9 +114,28 @@ struct PingSettings: Equatable, Sendable {
             menuBarCircleSize: defaults.double(forKey: Keys.menuBarCircleSize),
             circleStyle: defaults.string(forKey: Keys.circleStyle) ?? defaultCircleStyle,
             panelTransparency: defaults.bool(forKey: Keys.panelTransparency),
-            appearance: defaults.string(forKey: Keys.appearance) ?? defaultAppearance
+            appearance: defaults.string(forKey: Keys.appearance) ?? defaultAppearance,
+            alwaysOnTop: defaults.bool(forKey: Keys.alwaysOnTop)
         )
     }
+
+    static func isValidHTTPURL(_ string: String) -> Bool {
+        guard let url = URL(string: string.trimmingCharacters(in: .whitespacesAndNewlines)),
+              let scheme = url.scheme?.lowercased(),
+              ["http", "https"].contains(scheme),
+              url.host != nil else {
+            return false
+        }
+        return true
+    }
+
+    static func isValidPingHost(_ string: String) -> Bool {
+        let host = string.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !host.isEmpty, host.count <= 253 else { return false }
+        return host.range(of: Self.hostPattern, options: .regularExpression) != nil
+    }
+
+    private static let hostPattern = #"^[A-Za-z0-9](?:[A-Za-z0-9\-._:]*[A-Za-z0-9])?(?:%[A-Za-z0-9]+)?$"#
 
     private static func migrateDefaultURL(in defaults: UserDefaults) {
         guard defaults.integer(forKey: Keys.defaultURLMigrationVersion) < 1 else { return }
@@ -112,6 +148,8 @@ struct PingSettings: Equatable, Sendable {
     enum Keys {
         static let url = "pingURL"
         static let defaultURLMigrationVersion = "defaultURLMigrationVersion"
+        static let targetType = "targetType"
+        static let pingHost = "pingHost"
         static let interval = "pingInterval"
         static let timeout = "requestTimeout"
         static let yellowFailures = "yellowFailureThreshold"
@@ -125,8 +163,12 @@ struct PingSettings: Equatable, Sendable {
         static let circleStyle = "menuBarCircleStyle"
         static let panelTransparency = "panelTransparency"
         static let appearance = "appAppearance"
+        static let alwaysOnTop = "alwaysOnTop"
         static let panelPositionX = "panelPositionX"
         static let panelPositionTop = "panelPositionTop"
+        static let panelScreenID = "panelScreenID"
+        static let panelScreenX = "panelScreenX"
+        static let panelScreenTop = "panelScreenTop"
         static let panelOriginX = "panelOriginX"
         static let panelOriginY = "panelOriginY"
     }
