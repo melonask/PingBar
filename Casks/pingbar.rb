@@ -1,6 +1,6 @@
 cask "pingbar" do
-  version "1.3.0"
-  sha256 "fe303b5f00dc3e787bfbd63b6f466997e5961d55b2d77ef69dd988f9e1829d4a"
+  version "1.3.1"
+  sha256 "e790f89ea2de336ea349c3d0edc45fd9c37d3307b0328c91bf044e3d5247efbe"
 
   url "https://github.com/melonask/PingBar/releases/download/v#{version}/PingBar.zip"
   name "PingBar"
