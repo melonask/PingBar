@@ -1,44 +1,44 @@
 import Foundation
 
-struct PingSettings: Equatable, Sendable {
-    static let defaultURL = "https://www.chess.com"
+public struct PingSettings: Equatable, Sendable {
+    public static let defaultURL = "https://www.chess.com"
     private static let previousDefaultURL = "https://fast.com"
-    static let defaultTargetType = TargetType.http.rawValue
-    static let defaultPingHost = "192.168.1.1"
-    static let defaultInterval = 1.0
-    static let defaultTimeout = 5.0
-    static let defaultYellowFailures = 2
-    static let defaultRedFailures = 5
-    static let defaultMinimumStatus = 200
-    static let defaultMaximumStatus = 399
-    static let defaultChartWindow = 300.0
-    static let defaultMenuBarMode = MenuBarDisplayMode.circleAndTime.rawValue
-    static let defaultMenuBarTextSize = 9.0
-    static let defaultMenuBarCircleSize = 7.0
-    static let defaultCircleStyle = CircleStyle.colored.rawValue
-    static let defaultPanelTransparency = true
-    static let defaultAppearance = AppAppearance.system.rawValue
-    static let defaultAlwaysOnTop = false
+    public static let defaultTargetType = TargetType.http.rawValue
+    public static let defaultPingHost = "192.168.1.1"
+    public static let defaultInterval = 1.0
+    public static let defaultTimeout = 5.0
+    public static let defaultYellowFailures = 2
+    public static let defaultRedFailures = 5
+    public static let defaultMinimumStatus = 200
+    public static let defaultMaximumStatus = 399
+    public static let defaultChartWindow = 300.0
+    public static let defaultMenuBarMode = MenuBarDisplayMode.circleAndTime.rawValue
+    public static let defaultMenuBarTextSize = 9.0
+    public static let defaultMenuBarCircleSize = 7.0
+    public static let defaultCircleStyle = CircleStyle.colored.rawValue
+    public static let defaultPanelTransparency = true
+    public static let defaultAppearance = AppAppearance.system.rawValue
+    public static let defaultAlwaysOnTop = false
 
-    var urlString: String
-    var targetType: String
-    var pingHost: String
-    var interval: Double
-    var timeout: Double
-    var yellowFailures: Int
-    var redFailures: Int
-    var minimumStatus: Int
-    var maximumStatus: Int
-    var chartWindow: Double
-    var menuBarMode: String
-    var menuBarTextSize: Double
-    var menuBarCircleSize: Double
-    var circleStyle: String
-    var panelTransparency: Bool
-    var appearance: String
-    var alwaysOnTop: Bool
+    public var urlString: String
+    public var targetType: String
+    public var pingHost: String
+    public var interval: Double
+    public var timeout: Double
+    public var yellowFailures: Int
+    public var redFailures: Int
+    public var minimumStatus: Int
+    public var maximumStatus: Int
+    public var chartWindow: Double
+    public var menuBarMode: String
+    public var menuBarTextSize: Double
+    public var menuBarCircleSize: Double
+    public var circleStyle: String
+    public var panelTransparency: Bool
+    public var appearance: String
+    public var alwaysOnTop: Bool
 
-    init(
+    public init(
         urlString: String = defaultURL,
         targetType: String = defaultTargetType,
         pingHost: String = defaultPingHost,
@@ -76,7 +76,7 @@ struct PingSettings: Equatable, Sendable {
         self.alwaysOnTop = alwaysOnTop
     }
 
-    static func load(from defaults: UserDefaults = .standard) -> PingSettings {
+    public static func load(from defaults: UserDefaults = .standard) -> PingSettings {
         migrateDefaultURL(in: defaults)
         defaults.register(defaults: [
             Keys.url: defaultURL,
@@ -119,7 +119,7 @@ struct PingSettings: Equatable, Sendable {
         )
     }
 
-    static func isValidHTTPURL(_ string: String) -> Bool {
+    public static func isValidHTTPURL(_ string: String) -> Bool {
         guard let url = URL(string: string.trimmingCharacters(in: .whitespacesAndNewlines)),
               let scheme = url.scheme?.lowercased(),
               ["http", "https"].contains(scheme),
@@ -129,7 +129,7 @@ struct PingSettings: Equatable, Sendable {
         return true
     }
 
-    static func isValidPingHost(_ string: String) -> Bool {
+    public static func isValidPingHost(_ string: String) -> Bool {
         let host = string.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !host.isEmpty, host.count <= 253 else { return false }
         return host.range(of: Self.hostPattern, options: .regularExpression) != nil
@@ -145,43 +145,43 @@ struct PingSettings: Equatable, Sendable {
         defaults.set(1, forKey: Keys.defaultURLMigrationVersion)
     }
 
-    enum Keys {
-        static let url = "pingURL"
-        static let defaultURLMigrationVersion = "defaultURLMigrationVersion"
-        static let targetType = "targetType"
-        static let pingHost = "pingHost"
-        static let interval = "pingInterval"
-        static let timeout = "requestTimeout"
-        static let yellowFailures = "yellowFailureThreshold"
-        static let redFailures = "redFailureThreshold"
-        static let minimumStatus = "minimumSuccessStatus"
-        static let maximumStatus = "maximumSuccessStatus"
-        static let chartWindow = "chartWindowSeconds"
-        static let menuBarMode = "menuBarDisplayMode"
-        static let menuBarTextSize = "menuBarTextSize"
-        static let menuBarCircleSize = "menuBarCircleSize"
-        static let circleStyle = "menuBarCircleStyle"
-        static let panelTransparency = "panelTransparency"
-        static let appearance = "appAppearance"
-        static let alwaysOnTop = "alwaysOnTop"
-        static let panelPositionX = "panelPositionX"
-        static let panelPositionTop = "panelPositionTop"
-        static let panelScreenID = "panelScreenID"
-        static let panelScreenX = "panelScreenX"
-        static let panelScreenTop = "panelScreenTop"
-        static let panelOriginX = "panelOriginX"
-        static let panelOriginY = "panelOriginY"
+    public enum Keys {
+        public static let url = "pingURL"
+        public static let defaultURLMigrationVersion = "defaultURLMigrationVersion"
+        public static let targetType = "targetType"
+        public static let pingHost = "pingHost"
+        public static let interval = "pingInterval"
+        public static let timeout = "requestTimeout"
+        public static let yellowFailures = "yellowFailureThreshold"
+        public static let redFailures = "redFailureThreshold"
+        public static let minimumStatus = "minimumSuccessStatus"
+        public static let maximumStatus = "maximumSuccessStatus"
+        public static let chartWindow = "chartWindowSeconds"
+        public static let menuBarMode = "menuBarDisplayMode"
+        public static let menuBarTextSize = "menuBarTextSize"
+        public static let menuBarCircleSize = "menuBarCircleSize"
+        public static let circleStyle = "menuBarCircleStyle"
+        public static let panelTransparency = "panelTransparency"
+        public static let appearance = "appAppearance"
+        public static let alwaysOnTop = "alwaysOnTop"
+        public static let panelPositionX = "panelPositionX"
+        public static let panelPositionTop = "panelPositionTop"
+        public static let panelScreenID = "panelScreenID"
+        public static let panelScreenX = "panelScreenX"
+        public static let panelScreenTop = "panelScreenTop"
+        public static let panelOriginX = "panelOriginX"
+        public static let panelOriginY = "panelOriginY"
     }
 }
 
-enum AppAppearance: String, CaseIterable, Identifiable, Sendable {
+public enum AppAppearance: String, CaseIterable, Identifiable, Sendable {
     case system
     case light
     case dark
 
-    var id: String { rawValue }
+    public var id: String { rawValue }
 
-    var title: String {
+    public var title: String {
         switch self {
         case .system: "System"
         case .light: "Light"
@@ -190,13 +190,13 @@ enum AppAppearance: String, CaseIterable, Identifiable, Sendable {
     }
 }
 
-enum CircleStyle: String, CaseIterable, Identifiable, Sendable {
+public enum CircleStyle: String, CaseIterable, Identifiable, Sendable {
     case colored
     case monochrome
 
-    var id: String { rawValue }
+    public var id: String { rawValue }
 
-    var title: String {
+    public var title: String {
         switch self {
         case .colored: "Colored"
         case .monochrome: "Monochrome"
@@ -204,14 +204,14 @@ enum CircleStyle: String, CaseIterable, Identifiable, Sendable {
     }
 }
 
-enum MenuBarDisplayMode: String, CaseIterable, Identifiable, Sendable {
+public enum MenuBarDisplayMode: String, CaseIterable, Identifiable, Sendable {
     case circle
     case circleAndTime
     case time
 
-    var id: String { rawValue }
+    public var id: String { rawValue }
 
-    var title: String {
+    public var title: String {
         switch self {
         case .circle: "Circle"
         case .circleAndTime: "Circle + Time"

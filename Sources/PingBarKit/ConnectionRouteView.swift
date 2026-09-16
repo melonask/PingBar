@@ -1,13 +1,12 @@
-import AppKit
 import SwiftUI
 
-enum ConnectionRouteStatus: Equatable {
+public enum ConnectionRouteStatus: Equatable {
     case waiting
     case active
     case degraded
     case offline
 
-    var color: Color {
+    public var color: Color {
         switch self {
         case .waiting: .secondary
         case .active: .green
@@ -16,7 +15,7 @@ enum ConnectionRouteStatus: Equatable {
         }
     }
 
-    var accessibilityLabel: String {
+    public var accessibilityLabel: String {
         switch self {
         case .waiting: "Waiting for first check"
         case .active: "Connection active"
@@ -26,12 +25,18 @@ enum ConnectionRouteStatus: Equatable {
     }
 }
 
-struct ConnectionRouteView: View {
-    let sourceAddress: String
-    let target: PingTarget
-    let status: ConnectionRouteStatus
+public struct ConnectionRouteView: View {
+    public let sourceAddress: String
+    public let target: PingTarget
+    public let status: ConnectionRouteStatus
 
-    var body: some View {
+    public init(sourceAddress: String, target: PingTarget, status: ConnectionRouteStatus) {
+        self.sourceAddress = sourceAddress
+        self.target = target
+        self.status = status
+    }
+
+    public var body: some View {
         HStack(spacing: 7) {
             addressButton(sourceAddress, label: "THIS MAC", alignment: .center)
                 .frame(width: 116)
@@ -72,8 +77,7 @@ struct ConnectionRouteView: View {
         alignment: HorizontalAlignment
     ) -> some View {
         Button {
-            NSPasteboard.general.clearContents()
-            NSPasteboard.general.setString(value, forType: .string)
+            PlatformPasteboard.copy(value)
         } label: {
             VStack(alignment: alignment, spacing: 2) {
                 Text(label)
@@ -153,12 +157,12 @@ private struct ConnectionFlowIndicator: View {
 private struct DestinationIcon: View {
     let target: PingTarget
 
-    @State private var favicon: NSImage?
+    @State private var favicon: PlatformImage?
 
     var body: some View {
         Group {
             if let favicon {
-                Image(nsImage: favicon)
+                Image(platformImage: favicon)
                     .resizable()
                     .interpolation(.high)
                     .scaledToFit()
@@ -197,7 +201,7 @@ private struct DestinationIcon: View {
 private final class FaviconLoader {
     static let shared = FaviconLoader()
 
-    private let cache = NSCache<NSURL, NSImage>()
+    private let cache = NSCache<NSURL, PlatformImage>()
     private var recentFailures: [NSURL: Date] = [:]
     private let session: URLSession
 
@@ -210,7 +214,7 @@ private final class FaviconLoader {
         cache.countLimit = 32
     }
 
-    func image(for url: URL) async -> NSImage? {
+    func image(for url: URL) async -> PlatformImage? {
         let key = url as NSURL
         if let cached = cache.object(forKey: key) { return cached }
         if let failureDate = recentFailures[key], failureDate > Date.now.addingTimeInterval(-600) {
@@ -225,7 +229,7 @@ private final class FaviconLoader {
                   let response = response as? HTTPURLResponse,
                   200..<300 ~= response.statusCode,
                   data.count <= 1_000_000,
-                  let image = NSImage(data: data) else {
+                  let image = PlatformImage(data: data) else {
                 recentFailures[key] = .now
                 return nil
             }

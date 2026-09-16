@@ -1,15 +1,41 @@
 import SwiftUI
 
+/// Shape drawn for each land cell of the dotted world grid.
+public enum MicroWorldMapLandShape: String, CaseIterable, Identifiable, Sendable {
+    case circle
+    case hexagon
+
+    public var id: String { rawValue }
+}
+
 /// Fixed, lightweight world grid derived from DotMap's Miller projection with
 /// a diagonal grid at 24 rows. A compact bit mask avoids bundling and parsing
 /// the full GeoJSON dataset for a map that never changes configuration.
-struct MicroWorldMap: View {
-    let location: PublicIPLocation?
-    let lookupFailed: Bool
+public struct MicroWorldMap: View {
+    public let location: PublicIPLocation?
+    public let lookupFailed: Bool
+    private let scale: CGFloat
+    private let dotShape: MicroWorldMapLandShape
+
+    /// - Parameters:
+    ///   - scale: Multiplier applied to the compact 116×54 menu-bar footprint.
+    ///     The iOS dashboard uses a larger map than the macOS panel.
+    ///   - dotShape: Shape used for each land cell of the dotted world grid.
+    public init(
+        location: PublicIPLocation?,
+        lookupFailed: Bool,
+        scale: CGFloat = 1,
+        dotShape: MicroWorldMapLandShape = .circle
+    ) {
+        self.location = location
+        self.lookupFailed = lookupFailed
+        self.scale = scale
+        self.dotShape = dotShape
+    }
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
-    var body: some View {
+    public var body: some View {
         TimelineView(.animation(minimumInterval: 1 / 30, paused: location == nil || reduceMotion)) { timeline in
             Canvas(rendersAsynchronously: true) { context, size in
                 let layout = MapLayout(size: size)
@@ -19,9 +45,9 @@ struct MicroWorldMap: View {
                 }
             }
         }
-        .frame(width: 116, height: 54)
-        .padding(.horizontal, 7)
-        .padding(.vertical, 4)
+        .frame(width: 116 * scale, height: 54 * scale)
+        .padding(.horizontal, 7 * scale)
+        .padding(.vertical, 4 * scale)
         .overlay {
             if location == nil {
                 if lookupFailed {
@@ -40,21 +66,53 @@ struct MicroWorldMap: View {
     }
 
     private func drawLand(in context: inout GraphicsContext, layout: MapLayout) {
-        let radius = max(0.55, layout.scale * 0.1)
+        // Dot size is a ratio of the lattice spacing, so the map keeps the same
+        // density at any scale. A fixed floor would leave the 3× iOS map with
+        // menu-bar-sized dots and wide gaps between them.
+        let radius = layout.scale * Self.dotRadiusRatio
         var path = Path()
         for (row, mask) in Self.rowMasks.enumerated() {
             let offset = row.isMultiple(of: 2) ? 0.5 : 0
             for column in 0..<Self.columnCount where mask & (1 << UInt64(column)) != 0 {
                 let point = layout.point(x: Double(column) + offset, y: Double(row) * Self.rowStep)
-                path.addEllipse(in: CGRect(
-                    x: point.x - radius,
-                    y: point.y - radius,
-                    width: radius * 2,
-                    height: radius * 2
-                ))
+                switch dotShape {
+                case .circle:
+                    path.addEllipse(in: CGRect(
+                        x: point.x - radius,
+                        y: point.y - radius,
+                        width: radius * 2,
+                        height: radius * 2
+                    ))
+                case .hexagon:
+                    // The lattice is already hexagonal (√3/2 row step with a
+                    // half-column offset), so pointy-top hexagons tile it with
+                    // no seams as the radius approaches 1/√3 of the spacing.
+                    path.addPath(Self.hexagon(
+                        center: point,
+                        radius: layout.scale * Self.hexagonRadiusRatio
+                    ))
+                }
             }
         }
         context.fill(path, with: .color(.secondary.opacity(0.5)))
+    }
+
+    private static func hexagon(center: CGPoint, radius: CGFloat) -> Path {
+        var path = Path()
+        for corner in 0..<6 {
+            let angle = (Double(corner) * 60 - 90) * .pi / 180
+            let point = CGPoint(
+                x: center.x + radius * cos(angle),
+                y: center.y + radius * sin(angle)
+            )
+            if corner == 0 {
+                path.move(to: point)
+            } else {
+                path.addLine(to: point)
+            }
+        }
+        path.closeSubpath()
+        return path
     }
 
     private func drawLocation(
@@ -135,6 +193,15 @@ struct MicroWorldMap: View {
 
     private static let columnCount = 54
     private static let rowStep = sqrt(3.0) / 2
+
+    /// Cell radius as a fraction of the lattice spacing. Matches the original
+    /// menu-bar map, where 0.55 pt sat against a 1.92 pt spacing.
+    private static let dotRadiusRatio = 0.287
+
+    /// Hexagon circumradius as a fraction of the lattice spacing. Cells meet
+    /// their six neighbours at 1/√3 (≈ 0.577), so stopping short keeps a gap
+    /// between them the way the circle map has.
+    private static let hexagonRadiusRatio = 0.46
     private static let rowMasks: [UInt64] = [
         0x07ffc08078e300, 0x3fff73c03915fe, 0x3fffffa188ffff, 0x3fffffb0108ffe,
         0x11ffffa4018fe4, 0x03ffffe403bf80, 0x03fffff800ff80, 0x03fff4f803ff00,

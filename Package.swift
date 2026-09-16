@@ -4,12 +4,14 @@ import PackageDescription
 
 let package = Package(
     name: "PingBar",
-    platforms: [.macOS(.v14)],
+    platforms: [.macOS(.v14), .iOS(.v17)],
     products: [
-        .executable(name: "PingBar", targets: ["PingBar"])
+        .executable(name: "PingBar", targets: ["PingBar"]),
+        .library(name: "PingBarKit", targets: ["PingBarKit"])
     ],
     targets: [
-        .executableTarget(name: "PingBar"),
-        .testTarget(name: "PingBarTests", dependencies: ["PingBar"])
+        .target(name: "PingBarKit"),
+        .executableTarget(name: "PingBar", dependencies: ["PingBarKit"]),
+        .testTarget(name: "PingBarTests", dependencies: ["PingBarKit"])
     ]
 )

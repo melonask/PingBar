@@ -1,6 +1,6 @@
 import SwiftUI
 
-struct SettingsView: View {
+public struct SettingsView: View {
     @ObservedObject var monitor: PingMonitor
     @State private var showingRestoreConfirmation = false
     @AppStorage(PingSettings.Keys.url) private var url = PingSettings.defaultURL
@@ -14,7 +14,11 @@ struct SettingsView: View {
     @AppStorage(PingSettings.Keys.maximumStatus) private var maximumStatus = PingSettings.defaultMaximumStatus
     @AppStorage(PingSettings.Keys.chartWindow) private var chartWindow = PingSettings.defaultChartWindow
 
-    var body: some View {
+    public init(monitor: PingMonitor) {
+        self.monitor = monitor
+    }
+
+    public var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 14) {
                 HStack(alignment: .center, spacing: 12) {
@@ -74,46 +78,48 @@ struct SettingsView: View {
                         .foregroundStyle(.secondary)
                 }
 
-                settingCard("Menu Bar", systemImage: "menubar.rectangle") {
-                    HStack {
-                        Text("Preview")
+                #if os(macOS)
+                    settingCard("Menu Bar", systemImage: "menubar.rectangle") {
+                        HStack {
+                            Text("Preview")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                            Spacer()
+                            menuBarPreview
+                        }
+                        .padding(9)
+                        .background(.quaternary.opacity(0.55), in: RoundedRectangle(cornerRadius: 8))
+                        HStack(spacing: 8) {
+                            ForEach(MenuBarDisplayMode.allCases) { mode in
+                                modeButton(mode)
+                            }
+                        }
+                        Text("Choose exactly what PingBar keeps visible in the system menu bar.")
                             .font(.caption)
                             .foregroundStyle(.secondary)
-                        Spacer()
-                        menuBarPreview
-                    }
-                    .padding(9)
-                    .background(.quaternary.opacity(0.55), in: RoundedRectangle(cornerRadius: 8))
-                    HStack(spacing: 8) {
-                        ForEach(MenuBarDisplayMode.allCases) { mode in
-                            modeButton(mode)
-                        }
-                    }
-                    Text("Choose exactly what PingBar keeps visible in the system menu bar.")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                    if monitor.menuBarMode != .time {
-                        Divider()
-                        HStack {
-                            Text("Circle style")
-                            Spacer()
-                            Picker("Circle style", selection: circleStyleBinding) {
-                                ForEach(CircleStyle.allCases) { style in
-                                    Text(style.title).tag(style.rawValue)
+                        if monitor.menuBarMode != .time {
+                            Divider()
+                            HStack {
+                                Text("Circle style")
+                                Spacer()
+                                Picker("Circle style", selection: circleStyleBinding) {
+                                    ForEach(CircleStyle.allCases) { style in
+                                        Text(style.title).tag(style.rawValue)
+                                    }
                                 }
+                                .labelsHidden()
+                                .pickerStyle(.segmented)
+                                .frame(width: 170)
                             }
-                            .labelsHidden()
-                            .pickerStyle(.segmented)
-                            .frame(width: 170)
+                            Divider()
+                            valueRow("Circle size", value: menuBarCircleSizeBinding, unit: "pt")
                         }
-                        Divider()
-                        valueRow("Circle size", value: menuBarCircleSizeBinding, unit: "pt")
+                        if monitor.menuBarMode != .circle {
+                            Divider()
+                            valueRow("Time size", value: menuBarTextSizeBinding, unit: "pt")
+                        }
                     }
-                    if monitor.menuBarMode != .circle {
-                        Divider()
-                        valueRow("Time size", value: menuBarTextSizeBinding, unit: "pt")
-                    }
-                }
+                #endif
 
                 settingCard("Panel", systemImage: "rectangle.on.rectangle") {
                     HStack {
@@ -128,16 +134,18 @@ struct SettingsView: View {
                         .pickerStyle(.segmented)
                         .frame(width: 190)
                     }
-                    Divider()
-                    Toggle("Transparent background", isOn: panelTransparencyBinding)
-                    Text("Use the macOS translucent material on both Status and Settings.")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                    Divider()
-                    Toggle("Always on top", isOn: alwaysOnTopBinding)
-                    Text("Keep the panel visible above all other windows while open.")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
+                    #if os(macOS)
+                        Divider()
+                        Toggle("Transparent background", isOn: panelTransparencyBinding)
+                        Text("Use the macOS translucent material on both Status and Settings.")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                        Divider()
+                        Toggle("Always on top", isOn: alwaysOnTopBinding)
+                        Text("Keep the panel visible above all other windows while open.")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    #endif
                 }
 
                 settingCard("Monitoring", systemImage: "clock") {

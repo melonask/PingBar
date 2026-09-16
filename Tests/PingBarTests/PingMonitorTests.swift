@@ -1,5 +1,5 @@
 import Foundation
-@testable import PingBar
+@testable import PingBarKit
 import Testing
 
 @MainActor

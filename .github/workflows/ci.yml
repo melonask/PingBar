@@ -29,6 +29,17 @@ jobs:
       - name: Build app bundle
         run: ./scripts/build-app.sh
 
+      - name: Build iOS app
+        run: |
+          xcodebuild \
+            -project ios/PingBarIOS.xcodeproj \
+            -scheme PingBarIOS \
+            -configuration Debug \
+            -destination 'generic/platform=iOS' \
+            -derivedDataPath .build/ios-ci \
+            CODE_SIGNING_ALLOWED=NO \
+            build
+
       - name: Archive app bundle
         run: ditto -c -k --sequesterRsrc --keepParent PingBar.app PingBar.zip
 

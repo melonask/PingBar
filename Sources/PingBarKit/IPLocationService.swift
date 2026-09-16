@@ -1,20 +1,26 @@
 import Foundation
 
-struct PublicIPLocation: Equatable, Sendable {
-    let address: String
-    let latitude: Double
-    let longitude: Double
+public struct PublicIPLocation: Equatable, Sendable {
+    public let address: String
+    public let latitude: Double
+    public let longitude: Double
+
+    public init(address: String, latitude: Double, longitude: Double) {
+        self.address = address
+        self.latitude = latitude
+        self.longitude = longitude
+    }
 }
 
-protocol PublicIPLocationClient: Sendable {
+public protocol PublicIPLocationClient: Sendable {
     func locate() async throws -> PublicIPLocation
 }
 
-enum IPLocationError: LocalizedError, Equatable {
+public enum IPLocationError: LocalizedError, Equatable {
     case invalidResponse(String)
     case allProvidersFailed
 
-    var errorDescription: String? {
+    public var errorDescription: String? {
         switch self {
         case .invalidResponse(let provider): "Invalid location response from \(provider)"
         case .allProvidersFailed: "Public IP location is temporarily unavailable"
@@ -22,7 +28,7 @@ enum IPLocationError: LocalizedError, Equatable {
     }
 }
 
-struct IPLocationService: PublicIPLocationClient {
+public struct IPLocationService: PublicIPLocationClient {
     private enum Provider: CaseIterable, Sendable {
         case ipWhoIs
         case ipInfo
@@ -44,7 +50,7 @@ struct IPLocationService: PublicIPLocationClient {
 
     private let session: URLSession
 
-    init(session: URLSession? = nil) {
+    public init(session: URLSession? = nil) {
         if let session {
             self.session = session
         } else {
@@ -56,7 +62,7 @@ struct IPLocationService: PublicIPLocationClient {
         }
     }
 
-    func locate() async throws -> PublicIPLocation {
+    public func locate() async throws -> PublicIPLocation {
         for provider in Provider.allCases {
             try Task.checkCancellation()
             do {

@@ -2,28 +2,28 @@ import Combine
 import Foundation
 
 @MainActor
-final class PingMonitor: ObservableObject {
-    enum State: Equatable {
+public final class PingMonitor: ObservableObject {
+    public enum State: Equatable {
         case waiting
         case healthy
         case failing
     }
 
-    @Published private(set) var state = State.waiting
-    @Published private(set) var latencyMilliseconds: Double?
-    @Published private(set) var consecutiveFailures = 0
-    @Published private(set) var lastError: String?
-    @Published private(set) var history: [PingSample] = []
-    @Published private(set) var lastCheckedAt: Date?
-    @Published private(set) var menuBarMode: MenuBarDisplayMode
-    @Published private(set) var menuBarTextSize: Double
-    @Published private(set) var menuBarCircleSize: Double
-    @Published private(set) var circleStyle: CircleStyle
-    @Published private(set) var panelTransparency: Bool
-    @Published private(set) var appearance: AppAppearance
-    @Published private(set) var alwaysOnTop: Bool
-    @Published private(set) var publicIPLocation: PublicIPLocation?
-    @Published private(set) var publicIPLookupFailed = false
+    @Published public private(set) var state = State.waiting
+    @Published public private(set) var latencyMilliseconds: Double?
+    @Published public private(set) var consecutiveFailures = 0
+    @Published public private(set) var lastError: String?
+    @Published public private(set) var history: [PingSample] = []
+    @Published public private(set) var lastCheckedAt: Date?
+    @Published public private(set) var menuBarMode: MenuBarDisplayMode
+    @Published public private(set) var menuBarTextSize: Double
+    @Published public private(set) var menuBarCircleSize: Double
+    @Published public private(set) var circleStyle: CircleStyle
+    @Published public private(set) var panelTransparency: Bool
+    @Published public private(set) var appearance: AppAppearance
+    @Published public private(set) var alwaysOnTop: Bool
+    @Published public private(set) var publicIPLocation: PublicIPLocation?
+    @Published public private(set) var publicIPLookupFailed = false
     @Published private var cachedSettings: PingSettings
 
     private let client: any PingClient
@@ -34,7 +34,7 @@ final class PingMonitor: ObservableObject {
     private var checkTask: Task<PingResponse, Error>?
     private var activeCheckID: UUID?
 
-    init(
+    public init(
         client: any PingClient = RouterPingClient(),
         locationClient: any PublicIPLocationClient = IPLocationService(),
         defaults: UserDefaults = .standard
@@ -53,9 +53,9 @@ final class PingMonitor: ObservableObject {
         alwaysOnTop = settings.alwaysOnTop
     }
 
-    var settings: PingSettings { cachedSettings }
+    public var settings: PingSettings { cachedSettings }
 
-    var target: PingTarget {
+    public var target: PingTarget {
         let whitespace = CharacterSet.whitespacesAndNewlines
         if cachedSettings.targetType == TargetType.icmp.rawValue {
             return PingTarget(type: .icmp, address: cachedSettings.pingHost.trimmingCharacters(in: whitespace))
@@ -63,21 +63,21 @@ final class PingMonitor: ObservableObject {
         return PingTarget(type: .http, address: cachedSettings.urlString.trimmingCharacters(in: whitespace))
     }
 
-    var level: StatusLevel {
+    public var level: StatusLevel {
         if consecutiveFailures >= settings.redFailures { return .red }
         if consecutiveFailures >= settings.yellowFailures { return .yellow }
         return .green
     }
 
-    var statusText: String {
+    public var statusText: String {
         Self.displayLatencyText(milliseconds: latencyMilliseconds)
     }
 
-    var menuBarStatusText: String {
+    public var menuBarStatusText: String {
         Self.compactLatencyText(milliseconds: latencyMilliseconds)
     }
 
-    static func compactLatencyText(milliseconds: Double?) -> String {
+    public static func compactLatencyText(milliseconds: Double?) -> String {
         guard let milliseconds, milliseconds.isFinite, milliseconds >= 0 else { return " -- ms" }
 
         let roundedMilliseconds = milliseconds.rounded()
@@ -99,7 +99,7 @@ final class PingMonitor: ObservableObject {
         return "9999+s"
     }
 
-    static func displayLatencyText(milliseconds: Double?) -> String {
+    public static func displayLatencyText(milliseconds: Double?) -> String {
         guard let milliseconds, milliseconds.isFinite, milliseconds >= 0 else { return "-- ms" }
         if milliseconds < 1 { return "<1 ms" }
 
@@ -114,52 +114,52 @@ final class PingMonitor: ObservableObject {
         return String(format: "%.0f s", seconds)
     }
 
-    func setMenuBarMode(_ rawValue: String) {
+    public func setMenuBarMode(_ rawValue: String) {
         let mode = MenuBarDisplayMode(rawValue: rawValue) ?? .circleAndTime
         menuBarMode = mode
         defaults.set(mode.rawValue, forKey: PingSettings.Keys.menuBarMode)
     }
 
-    func setMenuBarTextSize(_ value: Double) {
+    public func setMenuBarTextSize(_ value: Double) {
         menuBarTextSize = min(max(value.rounded(), 8), 16)
         defaults.set(menuBarTextSize, forKey: PingSettings.Keys.menuBarTextSize)
     }
 
-    func setMenuBarCircleSize(_ value: Double) {
+    public func setMenuBarCircleSize(_ value: Double) {
         menuBarCircleSize = min(max(value.rounded(), 5), 14)
         defaults.set(menuBarCircleSize, forKey: PingSettings.Keys.menuBarCircleSize)
     }
 
-    func setCircleStyle(_ rawValue: String) {
+    public func setCircleStyle(_ rawValue: String) {
         let style = CircleStyle(rawValue: rawValue) ?? .colored
         circleStyle = style
         defaults.set(style.rawValue, forKey: PingSettings.Keys.circleStyle)
     }
 
-    func setPanelTransparency(_ value: Bool) {
+    public func setPanelTransparency(_ value: Bool) {
         panelTransparency = value
         defaults.set(value, forKey: PingSettings.Keys.panelTransparency)
     }
 
-    func setAppearance(_ rawValue: String) {
+    public func setAppearance(_ rawValue: String) {
         let value = AppAppearance(rawValue: rawValue) ?? .system
         appearance = value
         defaults.set(value.rawValue, forKey: PingSettings.Keys.appearance)
     }
 
-    func setAlwaysOnTop(_ value: Bool) {
+    public func setAlwaysOnTop(_ value: Bool) {
         alwaysOnTop = value
         defaults.set(value, forKey: PingSettings.Keys.alwaysOnTop)
     }
 
-    func refreshSettings() {
+    public func refreshSettings() {
         let updatedSettings = PingSettings.load(from: defaults)
         if updatedSettings != cachedSettings {
             cachedSettings = updatedSettings
         }
     }
 
-    func start() {
+    public func start() {
         guard loopTask == nil else { return }
         loopTask = Task { [weak self] in
             while !Task.isCancelled {
@@ -172,7 +172,7 @@ final class PingMonitor: ObservableObject {
         startLocationUpdates()
     }
 
-    func stop() {
+    public func stop() {
         loopTask?.cancel()
         loopTask = nil
         locationTask?.cancel()
@@ -204,7 +204,7 @@ final class PingMonitor: ObservableObject {
         }
     }
 
-    func checkNow() async {
+    public func checkNow() async {
         refreshSettings()
         checkTask?.cancel()
 
@@ -269,14 +269,19 @@ final class PingMonitor: ObservableObject {
     }
 }
 
-enum StatusLevel: Equatable {
+public enum StatusLevel: Equatable {
     case green
     case yellow
     case red
 }
 
-struct PingSample: Identifiable, Equatable {
-    let id = UUID()
-    let date: Date
-    let latency: Double?
+public struct PingSample: Identifiable, Equatable {
+    public let id = UUID()
+    public let date: Date
+    public let latency: Double?
+
+    public init(date: Date, latency: Double?) {
+        self.date = date
+        self.latency = latency
+    }
 }
