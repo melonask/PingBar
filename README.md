@@ -83,10 +83,10 @@ If **Open** is not available, try launching the app once, then open **System Set
 <img src="SystemSettings-PrivacySecurity-OpenAnyway.png" alt="Open Anyway in macOS Privacy and Security settings" width="900">
 </details>
 
-As a final option for a trusted download, remove only PingBar's quarantine attribute in Terminal:
+As a final option for a trusted download, remove only PingBar's quarantine attribute in Terminal. The absolute path matters: a Homebrew-installed `xattr` can shadow the system tool, and if it was built against a Python that Homebrew has since replaced it fails with `bad interpreter`:
 
 ```sh
-xattr -dr com.apple.quarantine /Applications/PingBar.app
+/usr/bin/xattr -dr com.apple.quarantine /Applications/PingBar.app
 open /Applications/PingBar.app
 ```
 

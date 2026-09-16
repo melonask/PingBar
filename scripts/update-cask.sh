@@ -67,7 +67,7 @@ cask "pingbar" do
   caveats <<~EOS
     PingBar is ad-hoc signed rather than notarized. If macOS blocks the first
     launch, Control-click PingBar.app in Applications and choose Open, or run:
-      xattr -dr com.apple.quarantine "#{appdir}/PingBar.app"
+      /usr/bin/xattr -dr com.apple.quarantine "#{appdir}/PingBar.app"
   EOS
 end
 RUBY
