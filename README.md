@@ -1,6 +1,6 @@
 # PingBar
 
-<div style="test-align:center" align="center">
+<div style="text-align:center" align="center">
     <img src="bar.png" alt="PingBar in menu-bar">
 </div>
 
@@ -16,7 +16,9 @@ The status dashboard keeps current health, latency, and recent history in one co
 
 ### iPhone
 
-<img src="ios.jpeg" alt="PingBar running on an iPhone" width="360">
+| Status dashboard | Settings |
+| --- | --- |
+| <img src="ios-main.jpeg" alt="PingBar status dashboard on iPhone in dark mode" width="290"> | <img src="ios-settings.jpeg" alt="PingBar settings on iPhone in light mode" width="290"> |
 
 The iPhone app shows the same dashboard and settings in a phone-sized layout, with the ping time centered above a larger public-IP map. Menu-bar and panel-window options are hidden there, since they have no iOS equivalent.
 
