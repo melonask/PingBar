@@ -154,8 +154,15 @@ public final class PingMonitor: ObservableObject {
 
     public func refreshSettings() {
         let updatedSettings = PingSettings.load(from: defaults)
-        if updatedSettings != cachedSettings {
-            cachedSettings = updatedSettings
+        guard updatedSettings != cachedSettings else { return }
+        let refreshIntervalChanged = updatedSettings.locationRefresh != cachedSettings.locationRefresh
+        cachedSettings = updatedSettings
+        // The location loop sleeps for a whole interval, so a shorter interval
+        // would otherwise not take effect until the old one elapsed.
+        if refreshIntervalChanged, locationTask != nil {
+            locationTask?.cancel()
+            locationTask = nil
+            startLocationUpdates()
         }
     }
 
@@ -199,9 +206,19 @@ public final class PingMonitor: ObservableObject {
                     // or network failures; retry at a deliberately low rate.
                     self.publicIPLookupFailed = self.publicIPLocation == nil
                 }
-                try? await Task.sleep(for: .seconds(900))
+                try? await Task.sleep(for: .seconds(Self.refreshDelay(from: self.settings.locationRefresh)))
             }
         }
+    }
+
+    /// Clamps the stored refresh interval so a bad or hand-edited preference
+    /// cannot hammer the location provider.
+    static func refreshDelay(from storedSeconds: Double) -> Double {
+        guard storedSeconds.isFinite else { return PingSettings.defaultLocationRefresh }
+        return min(
+            max(storedSeconds, PingSettings.minimumLocationRefresh),
+            PingSettings.maximumLocationRefresh
+        )
     }
 
     public func checkNow() async {

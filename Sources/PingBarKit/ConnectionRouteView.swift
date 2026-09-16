@@ -38,7 +38,7 @@ public struct ConnectionRouteView: View {
 
     public var body: some View {
         HStack(spacing: 7) {
-            addressButton(sourceAddress, label: "THIS MAC", alignment: .center)
+            addressButton(sourceAddress, label: sourceLabel, alignment: .center)
                 .frame(width: 116)
 
             Image(systemName: "house.fill")
@@ -108,6 +108,16 @@ public struct ConnectionRouteView: View {
         case .http: "DESTINATION"
         case .icmp: "DEVICE"
         }
+    }
+
+    /// The address on the left is always the device running the app, which is a
+    /// Mac on macOS and an iPhone on iOS.
+    private var sourceLabel: String {
+        #if os(iOS)
+            "THIS IPHONE"
+        #else
+            "THIS MAC"
+        #endif
     }
 
     private var displayedTargetAddress: String {

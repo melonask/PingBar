@@ -12,6 +12,7 @@ public struct PingSettings: Equatable, Sendable {
     public static let defaultMinimumStatus = 200
     public static let defaultMaximumStatus = 399
     public static let defaultChartWindow = 300.0
+    public static let defaultLocationRefresh = 900.0
     public static let defaultMenuBarMode = MenuBarDisplayMode.circleAndTime.rawValue
     public static let defaultMenuBarTextSize = 9.0
     public static let defaultMenuBarCircleSize = 7.0
@@ -30,6 +31,7 @@ public struct PingSettings: Equatable, Sendable {
     public var minimumStatus: Int
     public var maximumStatus: Int
     public var chartWindow: Double
+    public var locationRefresh: Double
     public var menuBarMode: String
     public var menuBarTextSize: Double
     public var menuBarCircleSize: Double
@@ -49,6 +51,7 @@ public struct PingSettings: Equatable, Sendable {
         minimumStatus: Int = defaultMinimumStatus,
         maximumStatus: Int = defaultMaximumStatus,
         chartWindow: Double = defaultChartWindow,
+        locationRefresh: Double = defaultLocationRefresh,
         menuBarMode: String = defaultMenuBarMode,
         menuBarTextSize: Double = defaultMenuBarTextSize,
         menuBarCircleSize: Double = defaultMenuBarCircleSize,
@@ -67,6 +70,7 @@ public struct PingSettings: Equatable, Sendable {
         self.minimumStatus = minimumStatus
         self.maximumStatus = maximumStatus
         self.chartWindow = chartWindow
+        self.locationRefresh = locationRefresh
         self.menuBarMode = menuBarMode
         self.menuBarTextSize = menuBarTextSize
         self.menuBarCircleSize = menuBarCircleSize
@@ -89,6 +93,7 @@ public struct PingSettings: Equatable, Sendable {
             Keys.minimumStatus: defaultMinimumStatus,
             Keys.maximumStatus: defaultMaximumStatus,
             Keys.chartWindow: defaultChartWindow,
+            Keys.locationRefresh: defaultLocationRefresh,
             Keys.menuBarMode: defaultMenuBarMode,
             Keys.menuBarTextSize: defaultMenuBarTextSize,
             Keys.menuBarCircleSize: defaultMenuBarCircleSize,
@@ -109,6 +114,7 @@ public struct PingSettings: Equatable, Sendable {
             minimumStatus: defaults.integer(forKey: Keys.minimumStatus),
             maximumStatus: defaults.integer(forKey: Keys.maximumStatus),
             chartWindow: defaults.double(forKey: Keys.chartWindow),
+            locationRefresh: defaults.double(forKey: Keys.locationRefresh),
             menuBarMode: defaults.string(forKey: Keys.menuBarMode) ?? defaultMenuBarMode,
             menuBarTextSize: defaults.double(forKey: Keys.menuBarTextSize),
             menuBarCircleSize: defaults.double(forKey: Keys.menuBarCircleSize),
@@ -117,6 +123,25 @@ public struct PingSettings: Equatable, Sendable {
             appearance: defaults.string(forKey: Keys.appearance) ?? defaultAppearance,
             alwaysOnTop: defaults.bool(forKey: Keys.alwaysOnTop)
         )
+    }
+
+    /// Intervals offered for re-resolving the public IP address. The list is
+    /// deliberately coarse: each refresh is an external lookup, so a short
+    /// interval is the fastest choice rather than a free-form value.
+    public static let locationRefreshOptions: [Double] = [60, 300, 900, 1_800, 3_600]
+
+    /// Shortest allowed refresh interval, used to clamp stored values.
+    public static let minimumLocationRefresh = 60.0
+
+    /// Longest allowed refresh interval, used to clamp stored values.
+    public static let maximumLocationRefresh = 3_600.0
+
+    public static func locationRefreshTitle(for seconds: Double) -> String {
+        if seconds < 60 { return "\(Int(seconds)) seconds" }
+        let minutes = seconds / 60
+        if minutes < 60 { return "\(Int(minutes)) min" }
+        let hours = minutes / 60
+        return hours == hours.rounded() ? "\(Int(hours)) hour" : String(format: "%.1f hours", hours)
     }
 
     public static func isValidHTTPURL(_ string: String) -> Bool {
@@ -157,6 +182,7 @@ public struct PingSettings: Equatable, Sendable {
         public static let minimumStatus = "minimumSuccessStatus"
         public static let maximumStatus = "maximumSuccessStatus"
         public static let chartWindow = "chartWindowSeconds"
+        public static let locationRefresh = "locationRefreshSeconds"
         public static let menuBarMode = "menuBarDisplayMode"
         public static let menuBarTextSize = "menuBarTextSize"
         public static let menuBarCircleSize = "menuBarCircleSize"

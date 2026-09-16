@@ -13,6 +13,7 @@ public struct SettingsView: View {
     @AppStorage(PingSettings.Keys.minimumStatus) private var minimumStatus = PingSettings.defaultMinimumStatus
     @AppStorage(PingSettings.Keys.maximumStatus) private var maximumStatus = PingSettings.defaultMaximumStatus
     @AppStorage(PingSettings.Keys.chartWindow) private var chartWindow = PingSettings.defaultChartWindow
+    @AppStorage(PingSettings.Keys.locationRefresh) private var locationRefresh = PingSettings.defaultLocationRefresh
 
     public init(monitor: PingMonitor) {
         self.monitor = monitor
@@ -157,6 +158,22 @@ public struct SettingsView: View {
                     Text("Checks run automatically; history keeps only the selected time window.")
                         .font(.caption)
                         .foregroundStyle(.secondary)
+                    Divider()
+                    HStack {
+                        Text("Recheck public IP")
+                        Spacer()
+                        Picker("Recheck public IP", selection: $locationRefresh) {
+                            ForEach(locationRefreshChoices, id: \.self) { seconds in
+                                Text(PingSettings.locationRefreshTitle(for: seconds)).tag(seconds)
+                            }
+                        }
+                        .labelsHidden()
+                        .pickerStyle(.menu)
+                        .frame(width: 130)
+                    }
+                    Text("How often the public IP address and its map location are refreshed.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
                 }
 
                 settingCard("Connection Health", systemImage: "circle.inset.filled") {
@@ -225,6 +242,13 @@ public struct SettingsView: View {
         .onChange(of: interval) { _, value in interval = max(value, 0.1) }
         .onChange(of: timeout) { _, value in timeout = max(value, 0.1) }
         .onChange(of: chartWindow) { _, value in chartWindow = min(max(value, 60), 86_400) }
+        .onChange(of: locationRefresh) { _, value in
+            locationRefresh = min(
+                max(value, PingSettings.minimumLocationRefresh),
+                PingSettings.maximumLocationRefresh
+            )
+            monitor.refreshSettings()
+        }
         .onChange(of: minimumStatus) { _, value in
             minimumStatus = min(max(value, 100), 599)
             if maximumStatus < minimumStatus { maximumStatus = minimumStatus }
@@ -292,6 +316,15 @@ public struct SettingsView: View {
         }
     }
 
+    /// The stored interval is normally one of the offered choices. If it is
+    /// not (an older or hand-edited value), it is shown alongside them so the
+    /// picker always has a selection instead of appearing blank.
+    private var locationRefreshChoices: [Double] {
+        PingSettings.locationRefreshOptions.contains(locationRefresh)
+            ? PingSettings.locationRefreshOptions
+            : (PingSettings.locationRefreshOptions + [locationRefresh]).sorted()
+    }
+
     private func restoreDefaults() {
         url = PingSettings.defaultURL
         targetType = PingSettings.defaultTargetType
@@ -303,6 +336,7 @@ public struct SettingsView: View {
         minimumStatus = PingSettings.defaultMinimumStatus
         maximumStatus = PingSettings.defaultMaximumStatus
         chartWindow = PingSettings.defaultChartWindow
+        locationRefresh = PingSettings.defaultLocationRefresh
         monitor.setMenuBarMode(PingSettings.defaultMenuBarMode)
         monitor.setMenuBarTextSize(PingSettings.defaultMenuBarTextSize)
         monitor.setMenuBarCircleSize(PingSettings.defaultMenuBarCircleSize)

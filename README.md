@@ -145,9 +145,9 @@ A successful request resets the consecutive-failure counter. Responses outside t
 
 ### Settings behavior
 
-Changes are saved automatically. Target type and address, interval, timeout, status thresholds, HTTP success range, chart history, menu-bar presentation, panel appearance, and always-on-top persist across launches. **Restore Defaults…** asks for confirmation before resetting all options.
+Changes are saved automatically. Target type and address, interval, timeout, status thresholds, HTTP success range, chart history, public-IP refresh, menu-bar presentation, panel appearance, and always-on-top persist across launches. **Restore Defaults…** asks for confirmation before resetting all options.
 
-PingBar refreshes its approximate public-IP location every 15 minutes using `ipwho.is`, with `ipinfo.io` as a fallback. The lookup is used only for the IP badge and micro-map and is not stored by PingBar.
+PingBar refreshes its approximate public-IP location using `ipwho.is`, with `ipinfo.io` as a fallback. The interval is configurable under **Monitoring → Recheck public IP** and defaults to 15 minutes; one minute is the shortest option. Changing it applies immediately rather than after the current interval elapses. The lookup is used only for the IP badge and micro-map and is not stored by PingBar.
 
 ## Develop
 

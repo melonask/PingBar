@@ -160,6 +160,30 @@ struct PingMonitorTests {
         #expect(defaults.bool(forKey: PingSettings.Keys.alwaysOnTop))
     }
 
+    @Test func locationRefreshDefaultsToOneMinuteFloorAndClamps() throws {
+        let defaults = try makeDefaults()
+
+        #expect(PingSettings.load(from: defaults).locationRefresh == 900)
+
+        // A hand-edited or legacy value is clamped rather than trusted, so the
+        // location provider cannot be polled faster than once a minute.
+        #expect(PingMonitor.refreshDelay(from: 1) == 60)
+        #expect(PingMonitor.refreshDelay(from: 60) == 60)
+        #expect(PingMonitor.refreshDelay(from: 86_400) == 3_600)
+        #expect(PingMonitor.refreshDelay(from: .nan) == 900)
+    }
+
+    @Test func locationRefreshPersistsAndOffersOneMinute() throws {
+        let defaults = try makeDefaults()
+        defaults.set(60.0, forKey: PingSettings.Keys.locationRefresh)
+
+        #expect(PingSettings.load(from: defaults).locationRefresh == 60)
+        #expect(PingSettings.locationRefreshOptions.contains(60))
+        #expect(PingSettings.locationRefreshTitle(for: 60) == "1 min")
+        #expect(PingSettings.locationRefreshTitle(for: 900) == "15 min")
+        #expect(PingSettings.locationRefreshTitle(for: 3_600) == "1 hour")
+    }
+
     @Test func icmpPingRecordsLatencyWithoutStatusRangeCheck() async throws {
         let defaults = try makeDefaults()
         defaults.set(TargetType.icmp.rawValue, forKey: PingSettings.Keys.targetType)
