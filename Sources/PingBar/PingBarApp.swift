@@ -26,9 +26,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         NSApp.setActivationPolicy(.accessory)
 
         let panelController = PanelController(monitor: monitor)
-        statusItemController = StatusItemController(monitor: monitor) { click in
+        let statusItemController = StatusItemController(monitor: monitor) { click in
             panelController.toggle(on: click.screen, below: click.itemFrame)
         }
+        panelController.isOnStatusItem = { [weak statusItemController] point in
+            statusItemController?.contains(point) ?? false
+        }
+        self.statusItemController = statusItemController
         self.panelController = panelController
         monitor.start()
     }

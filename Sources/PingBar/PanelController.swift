@@ -20,6 +20,11 @@ final class PanelController: NSObject, NSWindowDelegate {
     private var activeDrag: (mouse: CGPoint, origin: CGPoint)?
     private var isPinned: Bool
     private var outsideClickMonitor: Any?
+    /// Reports whether a screen point lies on PingBar's menu-bar item. A click
+    /// there is handled by `toggle`, so it must not also count as a click
+    /// outside the panel; otherwise the panel would close on mouse-down and
+    /// the item's action would reopen it on mouse-up.
+    var isOnStatusItem: (CGPoint) -> Bool = { _ in false }
     private var subscriptions = Set<AnyCancellable>()
 
     init(monitor: PingMonitor, placementStore: PanelPlacementStore = PanelPlacementStore()) {
@@ -82,10 +87,13 @@ final class PanelController: NSObject, NSWindowDelegate {
 
     /// Closes an unpinned panel when the user has moved on: another window
     /// took keyboard focus, or they clicked outside PingBar.
-    private func closeIfTransient() {
+    private func closeIfTransient(trigger: NSEvent? = NSApp.currentEvent) {
         // A sheet (such as the Restore Defaults confirmation) takes key status
         // from the panel while it is still in use.
         guard panel.isVisible, !isPinned, panel.attachedSheet == nil, activeDrag == nil else { return }
+        if let trigger, Self.mouseDownTypes.contains(trigger.type), isOnStatusItem(NSEvent.mouseLocation) {
+            return
+        }
         close()
     }
 
@@ -96,14 +104,17 @@ final class PanelController: NSObject, NSWindowDelegate {
     private func startMonitoringOutsideClicks() {
         guard outsideClickMonitor == nil else { return }
         outsideClickMonitor = NSEvent.addGlobalMonitorForEvents(
-            matching: [.leftMouseDown, .rightMouseDown, .otherMouseDown]
-        ) { [weak self] _ in
+            matching: Self.mouseDownMask
+        ) { [weak self] event in
             // AppKit calls global monitors on the main thread.
             MainActor.assumeIsolated {
-                self?.closeIfTransient()
+                self?.closeIfTransient(trigger: event)
             }
         }
     }
+
+    private static let mouseDownMask: NSEvent.EventTypeMask = [.leftMouseDown, .rightMouseDown, .otherMouseDown]
+    private static let mouseDownTypes: Set<NSEvent.EventType> = [.leftMouseDown, .rightMouseDown, .otherMouseDown]
 
     private func stopMonitoringOutsideClicks() {
         if let outsideClickMonitor {

@@ -56,6 +56,13 @@ final class StatusItemController: NSObject {
         onClick(Click(screen: screen, itemFrame: anchor))
     }
 
+    /// Whether `point` (in screen coordinates) lies on the menu-bar item.
+    func contains(_ point: CGPoint) -> Bool {
+        guard let button = statusItem.button, let window = button.window else { return false }
+        let frame = window.convertToScreen(button.convert(button.bounds, to: nil))
+        return NSMouseInRect(point, frame, false)
+    }
+
     private func updateLabel(latency: Double?, level: StatusLevel, settings: PingSettings) {
         guard let button = statusItem.button else { return }
         let latencyText = LatencyFormatter.compact(milliseconds: latency)
