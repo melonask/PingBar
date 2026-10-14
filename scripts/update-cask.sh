@@ -42,7 +42,10 @@ VERSION="${TAG#v}"
 # The Release workflow rebuilds PingBar.zip and replaces the asset with
 # --clobber whenever a tag is pushed. A checksum read before it finishes points
 # at a file that is about to disappear, so refuse to run while it is active.
-if command -v gh >/dev/null 2>&1 && gh auth status >/dev/null 2>&1; then
+# The workflow's own Homebrew job sets PINGBAR_RELEASE_PUBLISHED=1: it runs
+# after the asset is uploaded, while its own run still counts as in progress.
+if [ "${PINGBAR_RELEASE_PUBLISHED:-}" != "1" ] \
+    && command -v gh >/dev/null 2>&1 && gh auth status >/dev/null 2>&1; then
     ACTIVE="$(gh run list --repo "$REPOSITORY" --workflow release.yml --limit 20 \
         --json headBranch,status \
         --jq "[.[] | select(.headBranch == \"$TAG\" and .status != \"completed\")] | length" \
@@ -115,10 +118,13 @@ cask "pingbar" do
 end
 RUBY
 
-sed -i '' \
+# Write through a temporary file: `sed -i` takes different arguments on macOS
+# and Linux, and the cask is also generated on Linux CI runners.
+sed \
     -e "s|@VERSION@|$VERSION|" \
-    -e "s|@SHA256@|$SHA256|" \
-    -e "s|@REPOSITORY@|$REPOSITORY|" \
-    "$CASK"
+    -e "s|@SHA256@|$SHA256|g" \
+    -e "s|@REPOSITORY@|$REPOSITORY|g" \
+    "$CASK" > "$WORK/pingbar.rb"
+mv "$WORK/pingbar.rb" "$CASK"
 
 printf 'Updated %s to %s (%s)\n' "$CASK" "$VERSION" "$SHA256"

@@ -46,3 +46,81 @@ jobs:
           else
             gh release create "$RELEASE_TAG" PingBar.zip --generate-notes --title "PingBar $RELEASE_TAG"
           fi
+
+  homebrew:
+    name: Update Homebrew cask
+    needs: release
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    # Two tags pushed close together must not race on the same cask commit.
+    concurrency:
+      group: homebrew-cask
+      cancel-in-progress: false
+    env:
+      RELEASE_TAG: ${{ inputs.tag || github.ref_name }}
+      TAP_REPOSITORY: melonask/homebrew-pingbar
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v7
+        with:
+          ref: main
+
+      - name: Skip releases that are not the latest
+        id: latest
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          latest="$(gh release view --repo "$GITHUB_REPOSITORY" --json tagName --jq .tagName)"
+          if [ "$latest" = "$RELEASE_TAG" ]; then
+            echo "publish=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "::notice::$RELEASE_TAG is not the latest release ($latest); leaving the cask unchanged."
+            echo "publish=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Generate cask
+        if: steps.latest.outputs.publish == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PINGBAR_REPOSITORY: ${{ github.repository }}
+          # The release job above has already uploaded the final asset.
+          PINGBAR_RELEASE_PUBLISHED: "1"
+        run: ./scripts/update-cask.sh "$RELEASE_TAG"
+
+      - name: Check out tap
+        if: steps.latest.outputs.publish == 'true'
+        uses: actions/checkout@v7
+        with:
+          repository: ${{ env.TAP_REPOSITORY }}
+          token: ${{ secrets.HOMEBREW_TAP_TOKEN }}
+          path: tap
+
+      - name: Publish to tap
+        if: steps.latest.outputs.publish == 'true'
+        working-directory: tap
+        run: |
+          cp ../Casks/pingbar.rb Casks/pingbar.rb
+          if git diff --quiet -- Casks/pingbar.rb; then
+            echo "Tap already has the cask for $RELEASE_TAG."
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add Casks/pingbar.rb
+          git commit -m "Update PingBar to ${RELEASE_TAG#v}"
+          git push origin HEAD
+
+      - name: Commit cask to main
+        if: steps.latest.outputs.publish == 'true'
+        run: |
+          if git diff --quiet -- Casks/pingbar.rb; then
+            echo "Casks/pingbar.rb already points at $RELEASE_TAG."
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add Casks/pingbar.rb
+          git commit -m "Point the cask at ${RELEASE_TAG#v}"
+          git pull --rebase origin main
+          git push origin HEAD:main

@@ -175,7 +175,14 @@ The app icon is generated from `logo.svg` and `Resources/AppIcon.svg`. With Imag
 
 ### Publish the Homebrew cask
 
-`Casks/pingbar.rb` is the source of truth for the [melonask/homebrew-pingbar](https://github.com/melonask/homebrew-pingbar) tap. Pushing a `v*` tag runs the Release workflow, which builds `PingBar.zip` and publishes it to the GitHub release (replacing any asset already there). Do not upload a zip by hand. Once that workflow has finished, regenerate the cask and copy it into the tap:
+`Casks/pingbar.rb` is the source of truth for the [melonask/homebrew-pingbar](https://github.com/melonask/homebrew-pingbar) tap, and publishing is automatic. Pushing a `v*` tag runs the Release workflow, which:
+
+1. builds `PingBar.zip` and publishes it to the GitHub release (replacing any asset already there — do not upload a zip by hand), then
+2. regenerates the cask from the published asset, pushes it to the tap, and commits it back to `main`.
+
+The Homebrew job only updates the cask when the tag is the latest release, so re-running the workflow for an older tag never downgrades it. It pushes to the tap with the `HOMEBREW_TAP_TOKEN` repository secret: a fine-grained token with **Contents: Read and write** access to `melonask/homebrew-pingbar`.
+
+To regenerate the cask by hand, wait for the Release workflow to finish, then run:
 
 ```sh
 ./scripts/update-cask.sh            # latest release
