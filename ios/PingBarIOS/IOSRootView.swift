@@ -21,6 +21,6 @@ struct IOSRootView: View {
                     Label("Settings", systemImage: "gearshape")
                 }
         }
-        .preferredColorScheme(monitor.appearance.colorScheme)
+        .preferredColorScheme(monitor.settings.appearance.colorScheme)
     }
 }

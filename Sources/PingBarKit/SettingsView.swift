@@ -3,17 +3,15 @@ import SwiftUI
 public struct SettingsView: View {
     @ObservedObject var monitor: PingMonitor
     @State private var showingRestoreConfirmation = false
-    @AppStorage(PingSettings.Keys.url) private var url = PingSettings.defaultURL
-    @AppStorage(PingSettings.Keys.targetType) private var targetType = PingSettings.defaultTargetType
-    @AppStorage(PingSettings.Keys.pingHost) private var pingHost = PingSettings.defaultPingHost
-    @AppStorage(PingSettings.Keys.interval) private var interval = PingSettings.defaultInterval
-    @AppStorage(PingSettings.Keys.timeout) private var timeout = PingSettings.defaultTimeout
-    @AppStorage(PingSettings.Keys.yellowFailures) private var yellowFailures = PingSettings.defaultYellowFailures
-    @AppStorage(PingSettings.Keys.redFailures) private var redFailures = PingSettings.defaultRedFailures
-    @AppStorage(PingSettings.Keys.minimumStatus) private var minimumStatus = PingSettings.defaultMinimumStatus
-    @AppStorage(PingSettings.Keys.maximumStatus) private var maximumStatus = PingSettings.defaultMaximumStatus
-    @AppStorage(PingSettings.Keys.chartWindow) private var chartWindow = PingSettings.defaultChartWindow
-    @AppStorage(PingSettings.Keys.locationRefresh) private var locationRefresh = PingSettings.defaultLocationRefresh
+
+    /// Edits go straight through the monitor, which normalizes, persists and
+    /// applies them, so this view never holds a second copy of the settings.
+    private var settings: Binding<PingSettings> {
+        Binding(
+            get: { monitor.settings },
+            set: { monitor.updateSettings($0) }
+        )
+    }
 
     public init(monitor: PingMonitor) {
         self.monitor = monitor
@@ -43,9 +41,9 @@ public struct SettingsView: View {
                     HStack {
                         Text("Check type")
                         Spacer()
-                        Picker("Check type", selection: $targetType) {
+                        Picker("Check type", selection: settings.targetType) {
                             ForEach(TargetType.allCases) { type in
-                                Text(type.title).tag(type.rawValue)
+                                Text(type.title).tag(type)
                             }
                         }
                         .labelsHidden()
@@ -53,11 +51,11 @@ public struct SettingsView: View {
                         .frame(width: 190)
                     }
                     Divider()
-                    if targetType == TargetType.icmp.rawValue {
+                    if monitor.settings.targetType == .icmp {
                         HStack(spacing: 8) {
                             Image(systemName: "network")
                                 .foregroundStyle(.secondary)
-                            TextField("Device address", text: $pingHost, prompt: Text(PingSettings.defaultPingHost))
+                            TextField("Device address", text: settings.pingHost, prompt: Text(PingSettings.defaultPingHost))
                                 .textFieldStyle(.roundedBorder)
                         }
                         Label(pingHostValidationText, systemImage: isValidPingHost ? "checkmark.circle.fill" : "xmark.circle.fill")
@@ -67,7 +65,7 @@ public struct SettingsView: View {
                         HStack(spacing: 8) {
                             Image(systemName: "link")
                                 .foregroundStyle(.secondary)
-                            TextField("Website URL", text: $url, prompt: Text(PingSettings.defaultURL))
+                            TextField("Website URL", text: settings.urlString, prompt: Text(PingSettings.defaultURL))
                                 .textFieldStyle(.roundedBorder)
                         }
                         Label(urlValidationText, systemImage: isValidURL ? "checkmark.circle.fill" : "xmark.circle.fill")
@@ -98,14 +96,14 @@ public struct SettingsView: View {
                         Text("Choose exactly what PingBar keeps visible in the system menu bar.")
                             .font(.caption)
                             .foregroundStyle(.secondary)
-                        if monitor.menuBarMode != .time {
+                        if monitor.settings.menuBarMode.showsCircle {
                             Divider()
                             HStack {
                                 Text("Circle style")
                                 Spacer()
-                                Picker("Circle style", selection: circleStyleBinding) {
+                                Picker("Circle style", selection: settings.circleStyle) {
                                     ForEach(CircleStyle.allCases) { style in
-                                        Text(style.title).tag(style.rawValue)
+                                        Text(style.title).tag(style)
                                     }
                                 }
                                 .labelsHidden()
@@ -113,11 +111,11 @@ public struct SettingsView: View {
                                 .frame(width: 170)
                             }
                             Divider()
-                            valueRow("Circle size", value: menuBarCircleSizeBinding, unit: "pt")
+                            valueRow("Circle size", value: settings.menuBarCircleSize, unit: "pt")
                         }
-                        if monitor.menuBarMode != .circle {
+                        if monitor.settings.menuBarMode.showsTime {
                             Divider()
-                            valueRow("Time size", value: menuBarTextSizeBinding, unit: "pt")
+                            valueRow("Time size", value: settings.menuBarTextSize, unit: "pt")
                         }
                     }
                 #endif
@@ -126,9 +124,9 @@ public struct SettingsView: View {
                     HStack {
                         Text("Appearance")
                         Spacer()
-                        Picker("Appearance", selection: appearanceBinding) {
+                        Picker("Appearance", selection: settings.appearance) {
                             ForEach(AppAppearance.allCases) { appearance in
-                                Text(appearance.title).tag(appearance.rawValue)
+                                Text(appearance.title).tag(appearance)
                             }
                         }
                         .labelsHidden()
@@ -137,12 +135,12 @@ public struct SettingsView: View {
                     }
                     #if os(macOS)
                         Divider()
-                        Toggle("Transparent background", isOn: panelTransparencyBinding)
+                        Toggle("Transparent background", isOn: settings.panelTransparency)
                         Text("Use the macOS translucent material on both Status and Settings.")
                             .font(.caption)
                             .foregroundStyle(.secondary)
                         Divider()
-                        Toggle("Always on top", isOn: alwaysOnTopBinding)
+                        Toggle("Always on top", isOn: settings.alwaysOnTop)
                         Text("Keep the panel visible above all other windows while open.")
                             .font(.caption)
                             .foregroundStyle(.secondary)
@@ -150,11 +148,11 @@ public struct SettingsView: View {
                 }
 
                 settingCard("Monitoring", systemImage: "clock") {
-                    valueRow("Check interval", value: $interval, unit: "seconds")
+                    valueRow("Check interval", value: settings.interval, unit: "seconds")
                     Divider()
-                    valueRow("Request timeout", value: $timeout, unit: "seconds")
+                    valueRow("Request timeout", value: settings.timeout, unit: "seconds")
                     Divider()
-                    valueRow("Chart window", value: $chartWindow, unit: "seconds")
+                    valueRow("Chart window", value: settings.chartWindow, unit: "seconds")
                     Text("Checks run automatically; history keeps only the selected time window.")
                         .font(.caption)
                         .foregroundStyle(.secondary)
@@ -162,7 +160,7 @@ public struct SettingsView: View {
                     HStack {
                         Text("Recheck public IP")
                         Spacer()
-                        Picker("Recheck public IP", selection: $locationRefresh) {
+                        Picker("Recheck public IP", selection: settings.locationRefresh) {
                             ForEach(locationRefreshChoices, id: \.self) { seconds in
                                 Text(PingSettings.locationRefreshTitle(for: seconds)).tag(seconds)
                             }
@@ -177,22 +175,22 @@ public struct SettingsView: View {
                 }
 
                 settingCard("Connection Health", systemImage: "circle.inset.filled") {
-                    thresholdRow(color: .yellow, title: "Show yellow", value: $yellowFailures)
+                    thresholdRow(color: .yellow, title: "Show yellow", value: settings.yellowFailures)
                     Divider()
-                    thresholdRow(color: .red, title: "Show red", value: $redFailures)
+                    thresholdRow(color: .red, title: "Show red", value: settings.redFailures)
                     Text("The counter resets immediately after a successful request.")
                         .font(.caption)
                         .foregroundStyle(.secondary)
                 }
 
-                if targetType == TargetType.http.rawValue {
+                if monitor.settings.targetType == .http {
                     settingCard("HTTP Response Range", systemImage: "checkmark.circle") {
                         HStack {
                             VStack(alignment: .leading, spacing: 4) {
                                 Text("Minimum")
                                     .font(.caption)
                                     .foregroundStyle(.secondary)
-                                TextField("Minimum", value: $minimumStatus, format: .number)
+                                TextField("Minimum", value: settings.minimumStatus, format: .number)
                                     .textFieldStyle(.roundedBorder)
                             }
                             Image(systemName: "ellipsis")
@@ -201,7 +199,7 @@ public struct SettingsView: View {
                                 Text("Maximum")
                                     .font(.caption)
                                     .foregroundStyle(.secondary)
-                                TextField("Maximum", value: $maximumStatus, format: .number)
+                                TextField("Maximum", value: settings.maximumStatus, format: .number)
                                     .textFieldStyle(.roundedBorder)
                             }
                         }
@@ -228,33 +226,10 @@ public struct SettingsView: View {
             "Restore all settings?",
             isPresented: $showingRestoreConfirmation
         ) {
-            Button("Restore Defaults", role: .destructive, action: restoreDefaults)
+            Button("Restore Defaults", role: .destructive, action: monitor.restoreDefaultSettings)
             Button("Cancel", role: .cancel) {}
         } message: {
             Text("This resets the target, timing, thresholds, menu-bar display, and panel appearance.")
-        }
-        .onChange(of: yellowFailures) { _, value in
-            if redFailures <= value { redFailures = value + 1 }
-        }
-        .onChange(of: targetType) { monitor.refreshSettings() }
-        .onChange(of: url) { monitor.refreshSettings() }
-        .onChange(of: pingHost) { monitor.refreshSettings() }
-        .onChange(of: interval) { _, value in interval = max(value, 0.1) }
-        .onChange(of: timeout) { _, value in timeout = max(value, 0.1) }
-        .onChange(of: chartWindow) { _, value in chartWindow = min(max(value, 60), 86_400) }
-        .onChange(of: locationRefresh) { _, value in
-            locationRefresh = min(
-                max(value, PingSettings.minimumLocationRefresh),
-                PingSettings.maximumLocationRefresh
-            )
-            monitor.refreshSettings()
-        }
-        .onChange(of: minimumStatus) { _, value in
-            minimumStatus = min(max(value, 100), 599)
-            if maximumStatus < minimumStatus { maximumStatus = minimumStatus }
-        }
-        .onChange(of: maximumStatus) { _, value in
-            maximumStatus = min(max(value, minimumStatus), 599)
         }
     }
 
@@ -306,7 +281,7 @@ public struct SettingsView: View {
                 .frame(width: 9, height: 9)
             Text(title)
             Spacer()
-            Stepper(value: value, in: 1...1_000) {
+            Stepper(value: value, in: PingSettings.failureThresholdRange) {
                 Text("after \(value.wrappedValue)")
                     .monospacedDigit()
                     .frame(width: 66, alignment: .trailing)
@@ -320,72 +295,46 @@ public struct SettingsView: View {
     /// not (an older or hand-edited value), it is shown alongside them so the
     /// picker always has a selection instead of appearing blank.
     private var locationRefreshChoices: [Double] {
-        PingSettings.locationRefreshOptions.contains(locationRefresh)
+        let current = monitor.settings.locationRefresh
+        return PingSettings.locationRefreshOptions.contains(current)
             ? PingSettings.locationRefreshOptions
-            : (PingSettings.locationRefreshOptions + [locationRefresh]).sorted()
+            : (PingSettings.locationRefreshOptions + [current]).sorted()
     }
 
-    private func restoreDefaults() {
-        url = PingSettings.defaultURL
-        targetType = PingSettings.defaultTargetType
-        pingHost = PingSettings.defaultPingHost
-        interval = PingSettings.defaultInterval
-        timeout = PingSettings.defaultTimeout
-        yellowFailures = PingSettings.defaultYellowFailures
-        redFailures = PingSettings.defaultRedFailures
-        minimumStatus = PingSettings.defaultMinimumStatus
-        maximumStatus = PingSettings.defaultMaximumStatus
-        chartWindow = PingSettings.defaultChartWindow
-        locationRefresh = PingSettings.defaultLocationRefresh
-        monitor.setMenuBarMode(PingSettings.defaultMenuBarMode)
-        monitor.setMenuBarTextSize(PingSettings.defaultMenuBarTextSize)
-        monitor.setMenuBarCircleSize(PingSettings.defaultMenuBarCircleSize)
-        monitor.setCircleStyle(PingSettings.defaultCircleStyle)
-        monitor.setPanelTransparency(PingSettings.defaultPanelTransparency)
-        monitor.setAppearance(PingSettings.defaultAppearance)
-        monitor.setAlwaysOnTop(PingSettings.defaultAlwaysOnTop)
-        monitor.refreshSettings()
-    }
-
-    private var isValidURL: Bool { PingSettings.isValidHTTPURL(url) }
+    private var isValidURL: Bool { PingSettings.isValidHTTPURL(monitor.settings.urlString) }
 
     private var urlValidationText: String {
         isValidURL ? "Ready to monitor" : "Enter a complete HTTP or HTTPS URL"
     }
 
-    private var isValidPingHost: Bool { PingSettings.isValidPingHost(pingHost) }
+    private var isValidPingHost: Bool { PingSettings.isValidPingHost(monitor.settings.pingHost) }
 
     private var pingHostValidationText: String {
         isValidPingHost ? "Ready to ping" : "Enter an IP address or hostname"
     }
 
     private func modeButton(_ mode: MenuBarDisplayMode) -> some View {
-        Button {
-            monitor.setMenuBarMode(mode.rawValue)
+        let isSelected = monitor.settings.menuBarMode == mode
+        return Button {
+            monitor.updateSettings { $0.menuBarMode = mode }
         } label: {
             VStack(spacing: 8) {
                 HStack(spacing: 4) {
-                    if mode != .time {
-                        if monitor.circleStyle == .colored {
-                            Text("🟢")
-                                .font(.system(size: monitor.menuBarCircleSize))
-                        } else {
-                            Text("●")
-                                .font(.system(size: monitor.menuBarCircleSize, weight: .bold, design: .rounded))
-                        }
+                    if mode.showsCircle {
+                        statusCircle
                     }
-                    if mode != .circle {
+                    if mode.showsTime {
                         Text("024 ms")
                             .fontDesign(.monospaced)
                     }
                 }
-                .font(.system(size: monitor.menuBarTextSize, weight: .medium))
-                .frame(height: max(monitor.menuBarTextSize, monitor.menuBarCircleSize) + 4)
+                .font(.system(size: monitor.settings.menuBarTextSize, weight: .medium))
+                .frame(height: max(monitor.settings.menuBarTextSize, monitor.settings.menuBarCircleSize) + 4)
 
                 HStack(spacing: 4) {
                     Text(mode.title)
                         .font(.caption2.weight(.medium))
-                    if monitor.menuBarMode == mode {
+                    if isSelected {
                         Image(systemName: "checkmark.circle.fill")
                             .font(.caption2)
                     }
@@ -398,74 +347,37 @@ public struct SettingsView: View {
         .buttonStyle(.plain)
         .foregroundStyle(.primary)
         .background(
-            Color.primary.opacity(monitor.menuBarMode == mode ? 0.08 : 0),
+            Color.primary.opacity(isSelected ? 0.08 : 0),
             in: RoundedRectangle(cornerRadius: 8)
         )
         .overlay {
             RoundedRectangle(cornerRadius: 8)
-                .stroke(monitor.menuBarMode == mode ? Color.primary.opacity(0.35) : Color.secondary.opacity(0.18))
+                .stroke(isSelected ? Color.primary.opacity(0.35) : Color.secondary.opacity(0.18))
         }
     }
 
     private var menuBarPreview: some View {
         HStack(spacing: 5) {
-            if monitor.menuBarMode != .time {
-                if monitor.circleStyle == .colored {
-                    Text("🟢")
-                        .font(.system(size: monitor.menuBarCircleSize))
-                } else {
-                    Text("●")
-                        .font(.system(size: monitor.menuBarCircleSize, weight: .bold, design: .rounded))
-                }
+            if monitor.settings.menuBarMode.showsCircle {
+                statusCircle
             }
-            if monitor.menuBarMode != .circle {
+            if monitor.settings.menuBarMode.showsTime {
                 Text(monitor.menuBarStatusText)
-                    .font(.system(size: monitor.menuBarTextSize, weight: .medium, design: .monospaced))
+                    .font(.system(size: monitor.settings.menuBarTextSize, weight: .medium, design: .monospaced))
                     .lineLimit(1)
                     .fixedSize()
             }
         }
     }
 
-    private var menuBarTextSizeBinding: Binding<Double> {
-        Binding(
-            get: { monitor.menuBarTextSize },
-            set: { monitor.setMenuBarTextSize($0) }
-        )
-    }
-
-    private var menuBarCircleSizeBinding: Binding<Double> {
-        Binding(
-            get: { monitor.menuBarCircleSize },
-            set: { monitor.setMenuBarCircleSize($0) }
-        )
-    }
-
-    private var circleStyleBinding: Binding<String> {
-        Binding(
-            get: { monitor.circleStyle.rawValue },
-            set: { monitor.setCircleStyle($0) }
-        )
-    }
-
-    private var panelTransparencyBinding: Binding<Bool> {
-        Binding(
-            get: { monitor.panelTransparency },
-            set: { monitor.setPanelTransparency($0) }
-        )
-    }
-
-    private var alwaysOnTopBinding: Binding<Bool> {
-        Binding(
-            get: { monitor.alwaysOnTop },
-            set: { monitor.setAlwaysOnTop($0) }
-        )
-    }
-
-    private var appearanceBinding: Binding<String> {
-        Binding(
-            get: { monitor.appearance.rawValue },
-            set: { monitor.setAppearance($0) }
-        )
+    @ViewBuilder private var statusCircle: some View {
+        switch monitor.settings.circleStyle {
+        case .colored:
+            Text("🟢")
+                .font(.system(size: monitor.settings.menuBarCircleSize))
+        case .monochrome:
+            Text("●")
+                .font(.system(size: monitor.settings.menuBarCircleSize, weight: .bold, design: .rounded))
+        }
     }
 }

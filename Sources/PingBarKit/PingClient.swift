@@ -38,9 +38,12 @@ public enum PingError: LocalizedError, Equatable {
     case unreachable(String)
     case unreadableOutput
     case wrongTarget(TargetType)
+    case invalidTarget(TargetType)
 
     public var errorDescription: String? {
         switch self {
+        case .invalidTarget(.http): "Enter a complete HTTP or HTTPS URL"
+        case .invalidTarget(.icmp): "Enter an IP address or hostname"
         case .unreachable(let detail): detail
         case .unreadableOutput: "Ping completed but the response could not be read"
         case .wrongTarget(let expected): "Unsupported target type: \(expected.rawValue)"
@@ -84,41 +87,39 @@ public struct HTTPPingClient: PingClient {
 
 #if os(macOS)
 
-    /// macOS measures ICMP round trips by running the system `/sbin/ping` tool.
+    /// macOS measures ICMP round trips with the system `ping` tools: `/sbin/ping`
+    /// for IPv4 and hostnames, `/sbin/ping6` for IPv6 literals.
+    ///
+    /// The process is awaited without blocking a thread, terminated when the
+    /// calling task is cancelled, and bounded by `timeout` even where the tool
+    /// itself has no timeout option (`ping6`).
     public struct ICMPPingClient: PingClient {
-        private static let executableURL = URL(fileURLWithPath: "/sbin/ping")
-
         public init() {}
 
         public func ping(target: PingTarget, timeout: TimeInterval) async throws -> PingResponse {
             guard target.type == .icmp else { throw PingError.wrongTarget(.icmp) }
 
-            return try await Task.detached(priority: .utility) {
-                let process = Process()
-                process.executableURL = Self.executableURL
-                process.arguments = ["-c", "1", "-t", Self.timeoutArgument(timeout), target.address]
-                let outputPipe = Pipe()
-                process.standardOutput = outputPipe
-                process.standardError = outputPipe
+            let invocation = Self.invocation(for: target.address, timeout: timeout)
+            let result = try await PingProcess.run(invocation, timeout: max(timeout, 0.1))
+            guard !result.timedOut else {
+                throw PingError.unreachable("No reply from \(target.address)")
+            }
+            guard result.status == 0 else {
+                throw PingError.unreachable(Self.summary(of: result.output) ?? "No reply from \(target.address)")
+            }
+            guard let latencyMilliseconds = Self.latencyMilliseconds(from: result.output) else {
+                throw PingError.unreadableOutput
+            }
+            return PingResponse(statusCode: 0, duration: latencyMilliseconds / 1_000)
+        }
 
-                try process.run()
-                process.waitUntilExit()
-
-                let output = String(
-                    data: outputPipe.fileHandleForReading.readDataToEndOfFile(),
-                    encoding: .utf8
-                ) ?? ""
-
-                guard process.terminationStatus == 0 else {
-                    throw PingError.unreachable(
-                        Self.summary(of: output) ?? "No reply from \(target.address)"
-                    )
-                }
-                guard let latencyMilliseconds = Self.latencyMilliseconds(from: output) else {
-                    throw PingError.unreadableOutput
-                }
-                return PingResponse(statusCode: 0, duration: latencyMilliseconds / 1_000)
-            }.value
+        static func invocation(for address: String, timeout: TimeInterval) -> PingProcess.Invocation {
+            // `-n` skips reverse DNS so the measurement is the round trip only.
+            if address.contains(":") {
+                return .init(executable: URL(fileURLWithPath: "/sbin/ping6"), arguments: ["-n", "-c", "1", address])
+            }
+            let seconds = String(max(Int(timeout.rounded(.up)), 1))
+            return .init(executable: URL(fileURLWithPath: "/sbin/ping"), arguments: ["-n", "-c", "1", "-t", seconds, address])
         }
 
         static func latencyMilliseconds(from output: String) -> Double? {
@@ -136,9 +137,67 @@ public struct HTTPPingClient: PingClient {
             }
             return line
         }
+    }
 
-        private static func timeoutArgument(_ timeout: TimeInterval) -> String {
-            String(max(Int(timeout.rounded(.up)), 1))
+    /// Runs a short-lived command and collects its combined output.
+    enum PingProcess {
+        struct Invocation: Equatable {
+            let executable: URL
+            let arguments: [String]
+        }
+
+        struct Result {
+            let status: Int32
+            let output: String
+            let timedOut: Bool
+        }
+
+        static func run(_ invocation: Invocation, timeout: TimeInterval) async throws -> Result {
+            let process = Process()
+            process.executableURL = invocation.executable
+            process.arguments = invocation.arguments
+            let pipe = Pipe()
+            process.standardOutput = pipe
+            process.standardError = pipe
+            let deadline = Deadline()
+
+            return try await withTaskCancellationHandler {
+                try await withCheckedThrowingContinuation { continuation in
+                    process.terminationHandler = { finished in
+                        let data = pipe.fileHandleForReading.readDataToEndOfFile()
+                        continuation.resume(returning: Result(
+                            status: finished.terminationStatus,
+                            output: String(bytes: data, encoding: .utf8) ?? "",
+                            timedOut: deadline.hasPassed
+                        ))
+                    }
+                    do {
+                        try process.run()
+                    } catch {
+                        process.terminationHandler = nil
+                        continuation.resume(throwing: error)
+                        return
+                    }
+                    DispatchQueue.global(qos: .utility).asyncAfter(deadline: .now() + timeout) {
+                        guard process.isRunning else { return }
+                        deadline.markPassed()
+                        process.terminate()
+                    }
+                }
+            } onCancel: {
+                if process.isRunning { process.terminate() }
+            }
+        }
+
+        /// Records whether the run was stopped by the timeout rather than by
+        /// the tool exiting on its own.
+        private final class Deadline: @unchecked Sendable {
+            private let lock = NSLock()
+            private var passed = false
+
+            var hasPassed: Bool { lock.withLock { passed } }
+
+            func markPassed() { lock.withLock { passed = true } }
         }
     }
 
@@ -191,18 +250,11 @@ public struct HTTPPingClient: PingClient {
             )
 
             let identifier = UInt16.random(in: 1...UInt16.max)
-            var packet = [UInt8](repeating: 0, count: 16)
-            packet[0] = 8
-            packet[4] = UInt8(identifier >> 8)
-            packet[5] = UInt8(identifier & 0xff)
-            packet[7] = 1
-
-            let checksum = Self.checksum(of: packet)
-            packet[2] = UInt8(checksum >> 8)
-            packet[3] = UInt8(checksum & 0xff)
+            let packet = ICMPEcho.request(identifier: identifier, sequence: 1)
 
             let clock = ContinuousClock()
             let start = clock.now
+            let deadline = start.advanced(by: .seconds(timeout))
             let sent = packet.withUnsafeBytes { buffer in
                 sendto(
                     descriptor,
@@ -217,49 +269,74 @@ public struct HTTPPingClient: PingClient {
                 throw PingError.unreachable("Could not send request to \(host)")
             }
 
-            var reply = [UInt8](repeating: 0, count: 64)
-            var from = sockaddr_storage()
-            var fromLength = socklen_t(MemoryLayout<sockaddr_storage>.size)
-            let received = reply.withUnsafeMutableBytes { buffer in
-                withUnsafeMutablePointer(to: &from) { pointer in
-                    pointer.withMemoryRebound(to: sockaddr.self, capacity: 1) { socketAddress in
-                        recvfrom(
-                            descriptor,
-                            buffer.baseAddress,
-                            buffer.count,
-                            0,
-                            socketAddress,
-                            &fromLength
-                        )
-                    }
+            // Other ICMP traffic can arrive on the same socket, so keep reading
+            // until the reply to this request arrives or the timeout passes.
+            var reply = [UInt8](repeating: 0, count: 128)
+            while clock.now < deadline {
+                let received = reply.withUnsafeMutableBytes { buffer in
+                    recv(descriptor, buffer.baseAddress, buffer.count, 0)
+                }
+                guard received > 0 else { break }
+                if ICMPEcho.isReply(to: identifier, sequence: 1, in: reply[..<received]) {
+                    return PingResponse(statusCode: 0, duration: start.duration(to: clock.now).secondsValue)
                 }
             }
-            let duration = start.duration(to: clock.now)
-
-            guard received >= 8, reply[0] == 0 else {
-                throw PingError.unreachable("No reply from \(host)")
-            }
-            return PingResponse(statusCode: 0, duration: duration.secondsValue)
-        }
-
-        private static func checksum(of packet: [UInt8]) -> UInt16 {
-            var sum: UInt32 = 0
-            var index = 0
-            while index + 1 < packet.count {
-                sum += UInt32(packet[index]) << 8 | UInt32(packet[index + 1])
-                index += 2
-            }
-            if index < packet.count {
-                sum += UInt32(packet[index]) << 8
-            }
-            while sum >> 16 != 0 {
-                sum = (sum & 0xffff) + (sum >> 16)
-            }
-            return UInt16(truncatingIfNeeded: ~sum)
+            throw PingError.unreachable("No reply from \(host)")
         }
     }
 
 #endif
+
+/// Builds and recognises ICMP echo packets for unprivileged datagram sockets.
+enum ICMPEcho {
+    private static let echoRequestType: UInt8 = 8
+    private static let echoReplyType: UInt8 = 0
+
+    static func request(identifier: UInt16, sequence: UInt16) -> [UInt8] {
+        var packet = [UInt8](repeating: 0, count: 16)
+        packet[0] = echoRequestType
+        packet[4] = UInt8(identifier >> 8)
+        packet[5] = UInt8(identifier & 0xff)
+        packet[6] = UInt8(sequence >> 8)
+        packet[7] = UInt8(sequence & 0xff)
+        let sum = checksum(of: packet)
+        packet[2] = UInt8(sum >> 8)
+        packet[3] = UInt8(sum & 0xff)
+        return packet
+    }
+
+    /// Darwin delivers IPv4 datagram-socket ICMP replies with the IP header
+    /// still attached, so it is skipped before reading the ICMP message.
+    static func isReply(to identifier: UInt16, sequence: UInt16, in datagram: ArraySlice<UInt8>) -> Bool {
+        var message = datagram
+        if let first = message.first, first >> 4 == 4 {
+            let headerLength = Int(first & 0x0f) * 4
+            guard message.count >= headerLength else { return false }
+            message = message.dropFirst(headerLength)
+        }
+        guard message.count >= 8 else { return false }
+        let bytes = Array(message)
+        return bytes[0] == echoReplyType
+            && UInt16(bytes[4]) << 8 | UInt16(bytes[5]) == identifier
+            && UInt16(bytes[6]) << 8 | UInt16(bytes[7]) == sequence
+    }
+
+    static func checksum(of packet: [UInt8]) -> UInt16 {
+        var sum: UInt32 = 0
+        var index = 0
+        while index + 1 < packet.count {
+            sum += UInt32(packet[index]) << 8 | UInt32(packet[index + 1])
+            index += 2
+        }
+        if index < packet.count {
+            sum += UInt32(packet[index]) << 8
+        }
+        while sum >> 16 != 0 {
+            sum = (sum & 0xffff) + (sum >> 16)
+        }
+        return UInt16(truncatingIfNeeded: ~sum)
+    }
+}
 
 public struct RouterPingClient: PingClient {
     private let http: any PingClient

@@ -24,7 +24,7 @@ The iPhone app shows the same dashboard and settings in a phone-sized layout, wi
 
 ## Features
 
-- Monitor an HTTP or HTTPS endpoint, or ping a device on your local network (router, NAS, another computer) by IP address or hostname.
+- Monitor an HTTP or HTTPS endpoint, or ping a device on your local network (router, NAS, another computer) by IPv4/IPv6 address or hostname. Switching between HTTP and Ping starts fresh statistics and checks the new target immediately.
 - Configurable endpoint, interval, and timeout.
 - Green, yellow, and red availability states with configurable failure thresholds.
 - Current, average, and minimum latency with recent success rate.
@@ -35,7 +35,8 @@ The iPhone app shows the same dashboard and settings in a phone-sized layout, wi
 - Configurable menu-bar text size, circle size, HTTP success range, and chart window.
 - Movable status and settings panel with a shared compact footprint.
 - System, light, and dark appearances with optional macOS transparency.
-- Panel position persists across checks, failures, network changes, and app launches — it never resets automatically.
+- The panel opens on the display whose menu bar you click. Drag it by the handle and it remembers its position separately for each display, across checks, failures, network changes, display changes, and app launches.
+- In Settings, the top-left button closes Settings (or press Esc); on the status page it quits PingBar.
 - **Always on Top** keeps the panel visible above all other windows — it stays open until the feature is turned off.
 - Settings stored locally in `UserDefaults`.
 - A companion iPhone app that runs the same monitoring engine with a phone-sized dashboard, including a larger public-IP map.

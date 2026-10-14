@@ -52,19 +52,19 @@ struct PingMonitorTests {
         ]
 
         for (milliseconds, expected) in values {
-            let text = PingMonitor.compactLatencyText(milliseconds: milliseconds)
+            let text = LatencyFormatter.compact(milliseconds: milliseconds)
             #expect(text == expected)
             #expect(text.count == 6)
         }
     }
 
     @Test func dashboardLatencyAvoidsFalsePrecision() {
-        #expect(PingMonitor.displayLatencyText(milliseconds: nil) == "-- ms")
-        #expect(PingMonitor.displayLatencyText(milliseconds: 0.42) == "<1 ms")
-        #expect(PingMonitor.displayLatencyText(milliseconds: 24.33) == "24 ms")
-        #expect(PingMonitor.displayLatencyText(milliseconds: 902.032) == "902 ms")
-        #expect(PingMonitor.displayLatencyText(milliseconds: 999.6) == "1.00 s")
-        #expect(PingMonitor.displayLatencyText(milliseconds: 12_345) == "12.3 s")
+        #expect(LatencyFormatter.display(milliseconds: nil) == "-- ms")
+        #expect(LatencyFormatter.display(milliseconds: 0.42) == "<1 ms")
+        #expect(LatencyFormatter.display(milliseconds: 24.33) == "24 ms")
+        #expect(LatencyFormatter.display(milliseconds: 902.032) == "902 ms")
+        #expect(LatencyFormatter.display(milliseconds: 999.6) == "1.00 s")
+        #expect(LatencyFormatter.display(milliseconds: 12_345) == "12.3 s")
     }
 
     @Test func thresholdsControlYellowAndRedLevels() async throws {
@@ -120,57 +120,61 @@ struct PingMonitorTests {
         let defaults = try makeDefaults()
         let monitor = PingMonitor(client: StubClient(results: []), defaults: defaults)
 
-        monitor.setMenuBarMode(MenuBarDisplayMode.time.rawValue)
-        monitor.setMenuBarTextSize(13)
-        monitor.setMenuBarCircleSize(11)
-        monitor.setCircleStyle(CircleStyle.monochrome.rawValue)
-        monitor.setPanelTransparency(false)
-        monitor.setAppearance(AppAppearance.dark.rawValue)
+        monitor.updateSettings {
+            $0.menuBarMode = .time
+            $0.menuBarTextSize = 13
+            $0.menuBarCircleSize = 11
+            $0.circleStyle = .monochrome
+            $0.panelTransparency = false
+            $0.appearance = .dark
+        }
 
-        #expect(monitor.menuBarMode == .time)
-        #expect(monitor.menuBarTextSize == 13)
-        #expect(monitor.menuBarCircleSize == 11)
-        #expect(monitor.circleStyle == .monochrome)
-        #expect(!monitor.panelTransparency)
-        #expect(monitor.appearance == .dark)
+        #expect(monitor.settings.menuBarMode == .time)
+        #expect(monitor.settings.menuBarTextSize == 13)
+        #expect(monitor.settings.menuBarCircleSize == 11)
+        #expect(monitor.settings.circleStyle == .monochrome)
+        #expect(!monitor.settings.panelTransparency)
+        #expect(monitor.settings.appearance == .dark)
         #expect(defaults.string(forKey: PingSettings.Keys.menuBarMode) == MenuBarDisplayMode.time.rawValue)
         #expect(defaults.string(forKey: PingSettings.Keys.circleStyle) == CircleStyle.monochrome.rawValue)
         #expect(!defaults.bool(forKey: PingSettings.Keys.panelTransparency))
         #expect(defaults.string(forKey: PingSettings.Keys.appearance) == AppAppearance.dark.rawValue)
+        #expect(PingSettings.load(from: defaults) == monitor.settings)
     }
 
     @Test func panelTransparencyDefaultsToEnabled() throws {
         let defaults = try makeDefaults()
         let monitor = PingMonitor(client: StubClient(results: []), defaults: defaults)
 
-        #expect(monitor.panelTransparency)
         #expect(monitor.settings.panelTransparency)
-        #expect(monitor.appearance == .system)
+        #expect(monitor.settings.appearance == .system)
     }
 
     @Test func alwaysOnTopDefaultsToDisabledAndPersists() throws {
         let defaults = try makeDefaults()
         let monitor = PingMonitor(client: StubClient(results: []), defaults: defaults)
 
-        #expect(!monitor.alwaysOnTop)
+        #expect(!monitor.settings.alwaysOnTop)
 
-        monitor.setAlwaysOnTop(true)
+        monitor.updateSettings { $0.alwaysOnTop = true }
 
-        #expect(monitor.alwaysOnTop)
+        #expect(monitor.settings.alwaysOnTop)
         #expect(defaults.bool(forKey: PingSettings.Keys.alwaysOnTop))
     }
 
-    @Test func locationRefreshDefaultsToOneMinuteFloorAndClamps() throws {
+    @Test func locationRefreshDefaultsToFifteenMinutesAndClamps() throws {
         let defaults = try makeDefaults()
-
         #expect(PingSettings.load(from: defaults).locationRefresh == 900)
 
         // A hand-edited or legacy value is clamped rather than trusted, so the
         // location provider cannot be polled faster than once a minute.
-        #expect(PingMonitor.refreshDelay(from: 1) == 60)
-        #expect(PingMonitor.refreshDelay(from: 60) == 60)
-        #expect(PingMonitor.refreshDelay(from: 86_400) == 3_600)
-        #expect(PingMonitor.refreshDelay(from: .nan) == 900)
+        for (stored, expected) in [(1.0, 60.0), (60, 60), (86_400, 3_600)] {
+            defaults.set(stored, forKey: PingSettings.Keys.locationRefresh)
+            #expect(PingSettings.load(from: defaults).locationRefresh == expected)
+        }
+        var settings = PingSettings()
+        settings.locationRefresh = .nan
+        #expect(settings.normalized().locationRefresh == 900)
     }
 
     @Test func locationRefreshPersistsAndOffersOneMinute() throws {
@@ -303,16 +307,17 @@ struct PingMonitorTests {
             try IPLocationService.parse(response, providerName: "ipwho.is")
         }
     }
-
-    private func makeDefaults() throws -> UserDefaults {
-        let name = "PingBarTests.\(UUID().uuidString)"
-        let defaults = try #require(UserDefaults(suiteName: name))
-        defaults.removePersistentDomain(forName: name)
-        return defaults
-    }
 }
 
-private actor StubClient: PingClient {
+@MainActor
+func makeDefaults() throws -> UserDefaults {
+    let name = "PingBarTests.\(UUID().uuidString)"
+    let defaults = try #require(UserDefaults(suiteName: name))
+    defaults.removePersistentDomain(forName: name)
+    return defaults
+}
+
+actor StubClient: PingClient {
     private var results: [Result<PingResponse, Error>]
     private(set) var receivedTargets: [PingTarget] = []
 
@@ -327,7 +332,7 @@ private actor StubClient: PingClient {
     }
 }
 
-private actor SpyClient: PingClient {
+actor SpyClient: PingClient {
     private var count = 0
 
     var callCount: Int { count }
@@ -338,7 +343,7 @@ private actor SpyClient: PingClient {
     }
 }
 
-private actor DelayedClient: PingClient {
+actor DelayedClient: PingClient {
     private var responses: [(delay: Duration, response: PingResponse)]
 
     init(responses: [(delay: Duration, response: PingResponse)]) {

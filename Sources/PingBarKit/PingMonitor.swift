@@ -1,6 +1,11 @@
 import Combine
 import Foundation
 
+/// Runs the periodic availability checks and owns the live settings.
+///
+/// Results are tied to the target they were measured against: whenever the
+/// target changes, in-flight work is cancelled, previous results are cleared
+/// and the new target is checked straight away.
 @MainActor
 public final class PingMonitor: ObservableObject {
     public enum State: Equatable {
@@ -9,75 +14,271 @@ public final class PingMonitor: ObservableObject {
         case failing
     }
 
+    @Published public private(set) var settings: PingSettings
     @Published public private(set) var state = State.waiting
     @Published public private(set) var latencyMilliseconds: Double?
     @Published public private(set) var consecutiveFailures = 0
     @Published public private(set) var lastError: String?
     @Published public private(set) var history: [PingSample] = []
     @Published public private(set) var lastCheckedAt: Date?
-    @Published public private(set) var menuBarMode: MenuBarDisplayMode
-    @Published public private(set) var menuBarTextSize: Double
-    @Published public private(set) var menuBarCircleSize: Double
-    @Published public private(set) var circleStyle: CircleStyle
-    @Published public private(set) var panelTransparency: Bool
-    @Published public private(set) var appearance: AppAppearance
-    @Published public private(set) var alwaysOnTop: Bool
     @Published public private(set) var publicIPLocation: PublicIPLocation?
     @Published public private(set) var publicIPLookupFailed = false
-    @Published private var cachedSettings: PingSettings
+
+    /// How long address edits settle before the new address is checked, so
+    /// typing a URL does not send a request for every keystroke.
+    public static let addressEditDelay = Duration.milliseconds(600)
 
     private let client: any PingClient
     private let locationClient: any PublicIPLocationClient
     private let defaults: UserDefaults
-    private var loopTask: Task<Void, Never>?
-    private var locationTask: Task<Void, Never>?
-    private var checkTask: Task<PingResponse, Error>?
-    private var activeCheckID: UUID?
+    private var isRunning = false
+    private var checkLoop: Task<Void, Never>?
+    private var locationLoop: Task<Void, Never>?
+    /// Incremented whenever earlier checks become irrelevant; a check only
+    /// records its outcome if the generation it started with is still current.
+    private var checkGeneration = 0
 
     public init(
         client: any PingClient = RouterPingClient(),
         locationClient: any PublicIPLocationClient = IPLocationService(),
         defaults: UserDefaults = .standard
     ) {
-        let settings = PingSettings.load(from: defaults)
         self.client = client
         self.locationClient = locationClient
         self.defaults = defaults
-        cachedSettings = settings
-        menuBarMode = MenuBarDisplayMode(rawValue: settings.menuBarMode) ?? .circleAndTime
-        menuBarTextSize = settings.menuBarTextSize
-        menuBarCircleSize = settings.menuBarCircleSize
-        circleStyle = CircleStyle(rawValue: settings.circleStyle) ?? .colored
-        panelTransparency = settings.panelTransparency
-        appearance = AppAppearance(rawValue: settings.appearance) ?? .system
-        alwaysOnTop = settings.alwaysOnTop
+        settings = PingSettings.load(from: defaults)
     }
 
-    public var settings: PingSettings { cachedSettings }
+    // MARK: - Derived state
 
-    public var target: PingTarget {
-        let whitespace = CharacterSet.whitespacesAndNewlines
-        if cachedSettings.targetType == TargetType.icmp.rawValue {
-            return PingTarget(type: .icmp, address: cachedSettings.pingHost.trimmingCharacters(in: whitespace))
-        }
-        return PingTarget(type: .http, address: cachedSettings.urlString.trimmingCharacters(in: whitespace))
-    }
+    public var target: PingTarget { settings.target }
 
     public var level: StatusLevel {
-        if consecutiveFailures >= settings.redFailures { return .red }
-        if consecutiveFailures >= settings.yellowFailures { return .yellow }
-        return .green
+        StatusLevel(consecutiveFailures: consecutiveFailures, settings: settings)
     }
 
     public var statusText: String {
-        Self.displayLatencyText(milliseconds: latencyMilliseconds)
+        LatencyFormatter.display(milliseconds: latencyMilliseconds)
     }
 
     public var menuBarStatusText: String {
-        Self.compactLatencyText(milliseconds: latencyMilliseconds)
+        LatencyFormatter.compact(milliseconds: latencyMilliseconds)
     }
 
-    public static func compactLatencyText(milliseconds: Double?) -> String {
+    // MARK: - Settings
+
+    /// Applies, persists and reacts to new settings. Values are normalized
+    /// first, so callers can pass raw user input.
+    public func updateSettings(_ newValue: PingSettings) {
+        let updated = newValue.normalized()
+        let previous = settings
+        guard updated != previous else { return }
+        settings = updated
+        updated.save(to: defaults, changedFrom: previous)
+        settingsDidChange(from: previous, to: updated)
+    }
+
+    public func updateSettings(_ change: (inout PingSettings) -> Void) {
+        var copy = settings
+        change(&copy)
+        updateSettings(copy)
+    }
+
+    public func restoreDefaultSettings() {
+        PingSettings.removeAll(from: defaults)
+        let previous = settings
+        settings = PingSettings.load(from: defaults)
+        settingsDidChange(from: previous, to: settings)
+    }
+
+    private func settingsDidChange(from previous: PingSettings, to current: PingSettings) {
+        if current.target != previous.target {
+            resetResults()
+            let typeChanged = current.targetType != previous.targetType
+            restartChecks(after: typeChanged ? .zero : Self.addressEditDelay)
+        } else if current.interval != previous.interval {
+            restartChecks(after: .seconds(current.interval))
+        }
+
+        if current.chartWindow != previous.chartWindow {
+            trimHistory()
+        }
+
+        if current.locationRefresh != previous.locationRefresh {
+            restartLocationUpdates(after: publicIPLocation == nil ? .zero : .seconds(current.locationRefresh))
+        }
+    }
+
+    // MARK: - Lifecycle
+
+    public func start() {
+        guard !isRunning else { return }
+        isRunning = true
+        restartChecks(after: .zero)
+        restartLocationUpdates(after: .zero)
+    }
+
+    public func stop() {
+        isRunning = false
+        checkGeneration += 1
+        checkLoop?.cancel()
+        checkLoop = nil
+        locationLoop?.cancel()
+        locationLoop = nil
+    }
+
+    private func restartChecks(after delay: Duration) {
+        checkGeneration += 1
+        checkLoop?.cancel()
+        checkLoop = nil
+        guard isRunning else { return }
+        checkLoop = Task { [weak self] in
+            do {
+                try await Task.sleep(for: delay)
+                while true {
+                    guard let self else { return }
+                    await self.checkNow()
+                    try await Task.sleep(for: .seconds(self.settings.interval))
+                }
+            } catch {
+                // Cancelled: a newer loop replaced this one, or monitoring stopped.
+            }
+        }
+    }
+
+    private func restartLocationUpdates(after delay: Duration) {
+        locationLoop?.cancel()
+        locationLoop = nil
+        guard isRunning else { return }
+        locationLoop = Task { [weak self] in
+            do {
+                try await Task.sleep(for: delay)
+                while true {
+                    guard let self else { return }
+                    await self.refreshLocation()
+                    try await Task.sleep(for: .seconds(self.settings.locationRefresh))
+                }
+            } catch {
+                // Cancelled: the interval changed or monitoring stopped.
+            }
+        }
+    }
+
+    // MARK: - Checks
+
+    /// Checks the current target once and records the outcome, unless the
+    /// target changed or a newer check started while this one was running.
+    public func checkNow() async {
+        checkGeneration += 1
+        let generation = checkGeneration
+        let target = settings.target
+        let timeout = settings.timeout
+        let range = settings.minimumStatus...settings.maximumStatus
+
+        let outcome: Result<PingResponse, any Error>
+        do {
+            guard PingSettings.isValid(target) else { throw PingError.invalidTarget(target.type) }
+            outcome = try await .success(client.ping(target: target, timeout: timeout))
+        } catch {
+            outcome = .failure(error)
+        }
+
+        guard generation == checkGeneration, !Task.isCancelled else { return }
+        lastCheckedAt = .now
+        switch outcome {
+        case .success(let response) where target.type == .http && !range.contains(response.statusCode):
+            recordFailure("HTTP status \(response.statusCode)")
+        case .success(let response):
+            recordSuccess(latencyMilliseconds: response.duration * 1_000)
+        case .failure(let error):
+            recordFailure(error.localizedDescription)
+        }
+    }
+
+    private func recordSuccess(latencyMilliseconds latency: Double) {
+        state = .healthy
+        latencyMilliseconds = latency
+        consecutiveFailures = 0
+        lastError = nil
+        appendSample(latency: latency)
+    }
+
+    private func recordFailure(_ message: String) {
+        state = .failing
+        latencyMilliseconds = nil
+        consecutiveFailures += 1
+        lastError = message
+        appendSample(latency: nil)
+    }
+
+    private func resetResults() {
+        checkGeneration += 1
+        state = .waiting
+        latencyMilliseconds = nil
+        consecutiveFailures = 0
+        lastError = nil
+        history = []
+        lastCheckedAt = nil
+    }
+
+    private func appendSample(latency: Double?) {
+        history.append(PingSample(date: .now, latency: latency))
+        trimHistory()
+    }
+
+    private func trimHistory() {
+        let cutoff = Date.now.addingTimeInterval(-settings.chartWindow)
+        history.removeAll { $0.date < cutoff }
+    }
+
+    // MARK: - Public IP
+
+    private func refreshLocation() async {
+        do {
+            let location = try await locationClient.locate()
+            guard !Task.isCancelled else { return }
+            publicIPLocation = location
+            publicIPLookupFailed = false
+        } catch {
+            guard !Task.isCancelled else { return }
+            // Keep the last known location during temporary provider or
+            // network failures; only report a failure when nothing is known.
+            publicIPLookupFailed = publicIPLocation == nil
+        }
+    }
+}
+
+public enum StatusLevel: Equatable, Sendable {
+    case green
+    case yellow
+    case red
+
+    public init(consecutiveFailures: Int, settings: PingSettings) {
+        if consecutiveFailures >= settings.redFailures {
+            self = .red
+        } else if consecutiveFailures >= settings.yellowFailures {
+            self = .yellow
+        } else {
+            self = .green
+        }
+    }
+}
+
+public struct PingSample: Identifiable, Equatable, Sendable {
+    public let id = UUID()
+    public let date: Date
+    public let latency: Double?
+
+    public init(date: Date, latency: Double?) {
+        self.date = date
+        self.latency = latency
+    }
+}
+
+/// Formats latency for the dashboard and the fixed-width menu-bar label.
+public enum LatencyFormatter {
+    /// Always six characters wide so the menu-bar item never changes width.
+    public static func compact(milliseconds: Double?) -> String {
         guard let milliseconds, milliseconds.isFinite, milliseconds >= 0 else { return " -- ms" }
 
         let roundedMilliseconds = milliseconds.rounded()
@@ -86,12 +287,8 @@ public final class PingMonitor: ObservableObject {
         }
 
         let seconds = milliseconds / 1_000
-        if seconds < 10 {
-            return String(format: "%.2f s", seconds)
-        }
-        if seconds < 100 {
-            return String(format: "%.1f s", seconds)
-        }
+        if seconds < 10 { return String(format: "%.2f s", seconds) }
+        if seconds < 100 { return String(format: "%.1f s", seconds) }
         if seconds < 9_999.5 {
             let text = String(format: "%.0f s", seconds)
             return String(repeating: " ", count: 6 - text.count) + text
@@ -99,7 +296,7 @@ public final class PingMonitor: ObservableObject {
         return "9999+s"
     }
 
-    public static func displayLatencyText(milliseconds: Double?) -> String {
+    public static func display(milliseconds: Double?) -> String {
         guard let milliseconds, milliseconds.isFinite, milliseconds >= 0 else { return "-- ms" }
         if milliseconds < 1 { return "<1 ms" }
 
@@ -112,193 +309,5 @@ public final class PingMonitor: ObservableObject {
         if seconds < 10 { return String(format: "%.2f s", seconds) }
         if seconds < 100 { return String(format: "%.1f s", seconds) }
         return String(format: "%.0f s", seconds)
-    }
-
-    public func setMenuBarMode(_ rawValue: String) {
-        let mode = MenuBarDisplayMode(rawValue: rawValue) ?? .circleAndTime
-        menuBarMode = mode
-        defaults.set(mode.rawValue, forKey: PingSettings.Keys.menuBarMode)
-    }
-
-    public func setMenuBarTextSize(_ value: Double) {
-        menuBarTextSize = min(max(value.rounded(), 8), 16)
-        defaults.set(menuBarTextSize, forKey: PingSettings.Keys.menuBarTextSize)
-    }
-
-    public func setMenuBarCircleSize(_ value: Double) {
-        menuBarCircleSize = min(max(value.rounded(), 5), 14)
-        defaults.set(menuBarCircleSize, forKey: PingSettings.Keys.menuBarCircleSize)
-    }
-
-    public func setCircleStyle(_ rawValue: String) {
-        let style = CircleStyle(rawValue: rawValue) ?? .colored
-        circleStyle = style
-        defaults.set(style.rawValue, forKey: PingSettings.Keys.circleStyle)
-    }
-
-    public func setPanelTransparency(_ value: Bool) {
-        panelTransparency = value
-        defaults.set(value, forKey: PingSettings.Keys.panelTransparency)
-    }
-
-    public func setAppearance(_ rawValue: String) {
-        let value = AppAppearance(rawValue: rawValue) ?? .system
-        appearance = value
-        defaults.set(value.rawValue, forKey: PingSettings.Keys.appearance)
-    }
-
-    public func setAlwaysOnTop(_ value: Bool) {
-        alwaysOnTop = value
-        defaults.set(value, forKey: PingSettings.Keys.alwaysOnTop)
-    }
-
-    public func refreshSettings() {
-        let updatedSettings = PingSettings.load(from: defaults)
-        guard updatedSettings != cachedSettings else { return }
-        let refreshIntervalChanged = updatedSettings.locationRefresh != cachedSettings.locationRefresh
-        cachedSettings = updatedSettings
-        // The location loop sleeps for a whole interval, so a shorter interval
-        // would otherwise not take effect until the old one elapsed.
-        if refreshIntervalChanged, locationTask != nil {
-            locationTask?.cancel()
-            locationTask = nil
-            startLocationUpdates()
-        }
-    }
-
-    public func start() {
-        guard loopTask == nil else { return }
-        loopTask = Task { [weak self] in
-            while !Task.isCancelled {
-                guard let self else { return }
-                await self.checkNow()
-                let delay = max(self.settings.interval, 0.1)
-                try? await Task.sleep(for: .seconds(delay))
-            }
-        }
-        startLocationUpdates()
-    }
-
-    public func stop() {
-        loopTask?.cancel()
-        loopTask = nil
-        locationTask?.cancel()
-        locationTask = nil
-        checkTask?.cancel()
-        checkTask = nil
-        activeCheckID = nil
-    }
-
-    private func startLocationUpdates() {
-        guard locationTask == nil else { return }
-        locationTask = Task { [weak self] in
-            while !Task.isCancelled {
-                guard let self else { return }
-                do {
-                    let location = try await self.locationClient.locate()
-                    guard !Task.isCancelled else { return }
-                    self.publicIPLocation = location
-                    self.publicIPLookupFailed = false
-                } catch is CancellationError {
-                    return
-                } catch {
-                    // Keep the last known location during temporary provider
-                    // or network failures; retry at a deliberately low rate.
-                    self.publicIPLookupFailed = self.publicIPLocation == nil
-                }
-                try? await Task.sleep(for: .seconds(Self.refreshDelay(from: self.settings.locationRefresh)))
-            }
-        }
-    }
-
-    /// Clamps the stored refresh interval so a bad or hand-edited preference
-    /// cannot hammer the location provider.
-    static func refreshDelay(from storedSeconds: Double) -> Double {
-        guard storedSeconds.isFinite else { return PingSettings.defaultLocationRefresh }
-        return min(
-            max(storedSeconds, PingSettings.minimumLocationRefresh),
-            PingSettings.maximumLocationRefresh
-        )
-    }
-
-    public func checkNow() async {
-        refreshSettings()
-        checkTask?.cancel()
-
-        let target = self.target
-        let settings = self.settings
-        let checkID = UUID()
-        activeCheckID = checkID
-        let task = Task { [client, target, settings] in
-            guard Self.isValidTarget(target) else {
-                throw URLError(.badURL)
-            }
-            return try await client.ping(target: target, timeout: max(settings.timeout, 0.1))
-        }
-        checkTask = task
-
-        do {
-            let response = try await task.value
-            guard activeCheckID == checkID, !task.isCancelled else { return }
-            checkTask = nil
-            activeCheckID = nil
-            lastCheckedAt = .now
-            if target.type == .http,
-               !(settings.minimumStatus...settings.maximumStatus ~= response.statusCode) {
-                recordFailure("HTTP status \(response.statusCode)")
-                return
-            }
-            state = .healthy
-            latencyMilliseconds = response.duration * 1_000
-            consecutiveFailures = 0
-            lastError = nil
-            appendSample(latency: response.duration * 1_000)
-        } catch is CancellationError {
-            return
-        } catch {
-            guard activeCheckID == checkID else { return }
-            checkTask = nil
-            activeCheckID = nil
-            lastCheckedAt = .now
-            recordFailure(error.localizedDescription)
-        }
-    }
-
-    private func recordFailure(_ message: String) {
-        state = .failing
-        latencyMilliseconds = nil
-        consecutiveFailures += 1
-        lastError = message
-        appendSample(latency: nil)
-    }
-
-    private func appendSample(latency: Double?) {
-        history.append(PingSample(date: .now, latency: latency))
-        let cutoff = Date.now.addingTimeInterval(-max(settings.chartWindow, 60))
-        history.removeAll { $0.date < cutoff }
-    }
-
-    private static func isValidTarget(_ target: PingTarget) -> Bool {
-        switch target.type {
-        case .http: PingSettings.isValidHTTPURL(target.address)
-        case .icmp: PingSettings.isValidPingHost(target.address)
-        }
-    }
-}
-
-public enum StatusLevel: Equatable {
-    case green
-    case yellow
-    case red
-}
-
-public struct PingSample: Identifiable, Equatable {
-    public let id = UUID()
-    public let date: Date
-    public let latency: Double?
-
-    public init(date: Date, latency: Double?) {
-        self.date = date
-        self.latency = latency
     }
 }

@@ -206,7 +206,7 @@ public struct PingDashboardView: View {
     }
 
     private func formattedLatency(_ value: Double?) -> String {
-        PingMonitor.displayLatencyText(milliseconds: value)
+        LatencyFormatter.display(milliseconds: value)
     }
 
     private var chartDomain: ClosedRange<Date> {
