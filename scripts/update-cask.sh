@@ -39,6 +39,21 @@ fi
 
 VERSION="${TAG#v}"
 
+# The Release workflow rebuilds PingBar.zip and replaces the asset with
+# --clobber whenever a tag is pushed. A checksum read before it finishes points
+# at a file that is about to disappear, so refuse to run while it is active.
+if command -v gh >/dev/null 2>&1 && gh auth status >/dev/null 2>&1; then
+    ACTIVE="$(gh run list --repo "$REPOSITORY" --workflow release.yml --limit 20 \
+        --json headBranch,status \
+        --jq "[.[] | select(.headBranch == \"$TAG\" and .status != \"completed\")] | length" \
+        2>/dev/null || echo 0)"
+    if [ "${ACTIVE:-0}" != "0" ]; then
+        echo "The Release workflow for $TAG is still running and will replace" >&2
+        echo "PingBar.zip. Wait for it to finish, then run this script again." >&2
+        exit 1
+    fi
+fi
+
 # Prefer the digest GitHub publishes for the release asset: it avoids pulling
 # the whole download and is the value the tap is expected to carry.
 RELEASE_JSON="$(api_get "repos/$REPOSITORY/releases/tags/$TAG")"
@@ -55,6 +70,22 @@ fi
 
 if ! printf '%s' "$SHA256" | grep -Eq '^[a-f0-9]{64}$'; then
     echo "Could not determine a checksum for $TAG. Is the release published?" >&2
+    exit 1
+fi
+
+# Confirm the checksum against the file Homebrew will actually download, so a
+# replaced or stale asset can never ship in the cask.
+if [ ! -f "$WORK/PingBar.zip" ]; then
+    curl -fsSL -o "$WORK/PingBar.zip" \
+        "https://github.com/$REPOSITORY/releases/download/$TAG/PingBar.zip" || {
+        echo "Could not download PingBar.zip from the $TAG release." >&2
+        exit 1
+    }
+fi
+DOWNLOADED="$(shasum -a 256 "$WORK/PingBar.zip" | awk '{print $1}')"
+if [ "$DOWNLOADED" != "$SHA256" ]; then
+    echo "Checksum mismatch for $TAG: release reports $SHA256," >&2
+    echo "but the download is $DOWNLOADED. Is the asset being replaced?" >&2
     exit 1
 fi
 
