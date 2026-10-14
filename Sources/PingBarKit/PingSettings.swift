@@ -21,7 +21,7 @@ public struct PingSettings: Equatable, Sendable {
     public var chartWindow: Double = 300
     public var locationRefresh: Double = 900
     public var menuBarMode: MenuBarDisplayMode = .circleAndTime
-    public var menuBarTextSize: Double = 12
+    public var menuBarTextSize: Double = 14
     public var menuBarCircleSize: Double = 14
     public var circleStyle: CircleStyle = .colored
     public var panelTransparency = true

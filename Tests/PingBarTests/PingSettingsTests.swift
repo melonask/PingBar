@@ -8,7 +8,7 @@ struct PingSettingsTests {
         let settings = PingSettings()
 
         #expect(settings.menuBarCircleSize == 14)
-        #expect(settings.menuBarTextSize == 12)
+        #expect(settings.menuBarTextSize == 14)
         #expect(PingSettings.menuBarCircleSizeRange.contains(settings.menuBarCircleSize))
         #expect(PingSettings.menuBarTextSizeRange.contains(settings.menuBarTextSize))
     }
