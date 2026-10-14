@@ -4,6 +4,15 @@ import Testing
 
 @MainActor
 struct PingSettingsTests {
+    @Test func menuBarSizesDefaultToLargeCircleAndReadableTime() {
+        let settings = PingSettings()
+
+        #expect(settings.menuBarCircleSize == 14)
+        #expect(settings.menuBarTextSize == 12)
+        #expect(PingSettings.menuBarCircleSizeRange.contains(settings.menuBarCircleSize))
+        #expect(PingSettings.menuBarTextSizeRange.contains(settings.menuBarTextSize))
+    }
+
     @Test func normalizationKeepsDependentValuesConsistent() {
         var settings = PingSettings()
         settings.yellowFailures = 8
