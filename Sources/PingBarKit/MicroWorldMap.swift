@@ -36,12 +36,17 @@ public struct MicroWorldMap: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     public var body: some View {
-        TimelineView(.animation(minimumInterval: 1 / 30, paused: location == nil || reduceMotion)) { timeline in
-            Canvas(rendersAsynchronously: true) { context, size in
-                let layout = MapLayout(size: size)
-                drawLand(in: &context, layout: layout)
-                if let location {
-                    drawLocation(location, at: timeline.date, in: &context, layout: layout)
+        // The land grid never changes, so it is drawn once in its own layer;
+        // only the small pulsing marker is redrawn on each animation frame.
+        Canvas(rendersAsynchronously: true) { context, size in
+            drawLand(in: &context, layout: MapLayout(size: size))
+        }
+        .overlay {
+            if let location {
+                TimelineView(.animation(minimumInterval: 1 / 30, paused: reduceMotion)) { timeline in
+                    Canvas(rendersAsynchronously: true) { context, size in
+                        drawLocation(location, at: timeline.date, in: &context, layout: MapLayout(size: size))
+                    }
                 }
             }
         }

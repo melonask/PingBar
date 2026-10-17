@@ -34,12 +34,18 @@ final class StatusItemController: NSObject {
             monitor.$consecutiveFailures,
             monitor.$settings
         )
-        .sink { [weak self] latency, failures, settings in
-            self?.updateLabel(
+        // A check updates several of these in turn; only redraw the menu-bar
+        // item when what it shows actually changed.
+        .map { latency, failures, settings in
+            LabelContent(
                 latency: latency,
                 level: StatusLevel(consecutiveFailures: failures, settings: settings),
                 settings: settings
             )
+        }
+        .removeDuplicates()
+        .sink { [weak self] content in
+            self?.updateLabel(content)
         }
     }
 
@@ -63,11 +69,32 @@ final class StatusItemController: NSObject {
         return NSMouseInRect(point, frame, false)
     }
 
-    private func updateLabel(latency: Double?, level: StatusLevel, settings: PingSettings) {
+    /// Everything the menu-bar item displays. Latency is kept as the rounded
+    /// text, so sub-millisecond jitter does not redraw an unchanged label.
+    private struct LabelContent: Equatable {
+        let latencyText: String
+        let accessibilityLatency: String
+        let level: StatusLevel
+        let settings: PingSettings
+
+        init(latency: Double?, level: StatusLevel, settings: PingSettings) {
+            latencyText = LatencyFormatter.compact(milliseconds: latency)
+            accessibilityLatency = LatencyFormatter.display(milliseconds: latency)
+            self.level = level
+            self.settings = settings
+        }
+    }
+
+    private func updateLabel(_ content: LabelContent) {
         guard let button = statusItem.button else { return }
-        let latencyText = LatencyFormatter.compact(milliseconds: latency)
-        button.attributedTitle = StatusItemLabel.title(latencyText: latencyText, level: level, settings: settings)
-        button.setAccessibilityLabel("PingBar, \(level.accessibilityDescription), \(LatencyFormatter.display(milliseconds: latency))")
+        button.attributedTitle = StatusItemLabel.title(
+            latencyText: content.latencyText,
+            level: content.level,
+            settings: content.settings
+        )
+        button.setAccessibilityLabel(
+            "PingBar, \(content.level.accessibilityDescription), \(content.accessibilityLatency)"
+        )
     }
 }
 

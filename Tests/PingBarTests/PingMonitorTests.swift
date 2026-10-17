@@ -10,6 +10,12 @@ struct PingMonitorTests {
         #expect(PingSettings.load(from: defaults).urlString == "https://www.chess.com")
     }
 
+    @Test func periodicWakeUpsAllowProportionalCappedTolerance() {
+        #expect(PingMonitor.wakeTolerance(for: .seconds(1)) == .milliseconds(100))
+        #expect(PingMonitor.wakeTolerance(for: .seconds(30)) == .seconds(3))
+        #expect(PingMonitor.wakeTolerance(for: .seconds(900)) == .seconds(5))
+    }
+
     @Test func previousDefaultEndpointMigratesButCustomEndpointDoesNot() throws {
         let oldDefaults = try makeDefaults()
         oldDefaults.set("https://fast.com", forKey: PingSettings.Keys.url)

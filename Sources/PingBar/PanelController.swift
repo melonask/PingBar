@@ -14,6 +14,12 @@ final class PanelController: NSObject, NSWindowDelegate {
     private let model = PanelModel()
     private let placementStore: PanelPlacementStore
     private let panel = StatusPanel()
+    /// Hosts the panel's SwiftUI content only while the panel is on screen.
+    /// A hidden window's hosting view still re-evaluates its views on every
+    /// monitor update and keeps `TimelineView` animations running, which
+    /// costs far more energy than the checks themselves.
+    private let hostingView = NSHostingView<PanelView?>(rootView: nil)
+    private var content: PanelView?
     /// Top-left corner the panel is placed at; it stays put when the content
     /// height changes (for example when the failure banner appears).
     private var anchor: CGPoint?
@@ -39,7 +45,8 @@ final class PanelController: NSObject, NSWindowDelegate {
             dragMoved: { [weak self] location in self?.dragMoved(to: location) },
             dragEnded: { [weak self] in self?.dragEnded() }
         )
-        panel.contentView = NSHostingView(rootView: PanelView(monitor: monitor, model: model, actions: actions))
+        content = PanelView(monitor: monitor, model: model, actions: actions)
+        panel.contentView = hostingView
         panel.delegate = self
         panel.onCancel = { [weak self] in self?.cancel() }
 
@@ -73,6 +80,9 @@ final class PanelController: NSObject, NSWindowDelegate {
     }
 
     private func show(on screen: NSScreen, below itemFrame: CGRect?) {
+        if hostingView.rootView == nil {
+            hostingView.rootView = content
+        }
         place(frame(on: screen, below: itemFrame))
         panel.makeKeyAndOrderFront(nil)
         startMonitoringOutsideClicks()
@@ -83,6 +93,7 @@ final class PanelController: NSObject, NSWindowDelegate {
         activeDrag = nil
         panel.orderOut(nil)
         model.reset()
+        hostingView.rootView = nil
     }
 
     /// Closes an unpinned panel when the user has moved on: another window

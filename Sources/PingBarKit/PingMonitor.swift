@@ -138,7 +138,8 @@ public final class PingMonitor: ObservableObject {
                 while true {
                     guard let self else { return }
                     await self.checkNow()
-                    try await Task.sleep(for: .seconds(self.settings.interval))
+                    let interval = Duration.seconds(self.settings.interval)
+                    try await Task.sleep(for: interval, tolerance: Self.wakeTolerance(for: interval))
                 }
             } catch {
                 // Cancelled: a newer loop replaced this one, or monitoring stopped.
@@ -156,12 +157,19 @@ public final class PingMonitor: ObservableObject {
                 while true {
                     guard let self else { return }
                     await self.refreshLocation()
-                    try await Task.sleep(for: .seconds(self.settings.locationRefresh))
+                    let interval = Duration.seconds(self.settings.locationRefresh)
+                    try await Task.sleep(for: interval, tolerance: Self.wakeTolerance(for: interval))
                 }
             } catch {
                 // Cancelled: the interval changed or monitoring stopped.
             }
         }
+    }
+
+    /// Lets the system coalesce periodic wake-ups with other timers: 10% of
+    /// the interval, capped at 5 s, which is invisible in the chart.
+    nonisolated static func wakeTolerance(for interval: Duration) -> Duration {
+        min(interval / 10, .seconds(5))
     }
 
     // MARK: - Checks
